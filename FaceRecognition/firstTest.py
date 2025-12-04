@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import insightface
+from datetime import datetime, timedelta
 from insightface.app import FaceAnalysis
 
 # Initialise l'application InsightFace
@@ -26,8 +27,8 @@ def get_embedding_from_image(img_path):
 
 # Exemple : liste de visages connus
 known_faces = {
-    "Mathis": get_embedding_from_image("./faces/mathis.jpeg"),
-    "Clem": get_embedding_from_image("./faces/clem.jpeg")
+    "Mathis": {"embed": get_embedding_from_image("./faces/mathis.jpeg"), "promo": "5IRC", "lastSeen":None},
+    "Clem": {"embed": get_embedding_from_image("./faces/clem.jpeg"), "promo": "4IRC", "lastSeen":None}
 }
 
 # Distance cosinus entre deux embeddings
@@ -56,15 +57,25 @@ while True:
         best_name = "Inconnu"
         best_score = -1
 
-        for name, known_emb in known_faces.items():
-            score = cosine_similarity(emb, known_emb)
+        for name, values in known_faces.items():
+            score = cosine_similarity(emb, values["embed"])
             if score > best_score:
                 best_score = score
                 best_name = name
+            
+
+
 
         # Vérifie si la personne est reconnue
         if best_score < THRESHOLD:
             best_name = "Inconnu"
+            
+        if best_name != "Inconnu":
+            # Check if the last time seen is in the last 5 minutes
+            if known_faces[best_name]["lastSeen"] is None or datetime.now() - known_faces[best_name]["lastSeen"] > timedelta(minutes=5):
+                print(f"{best_name} ({known_faces[best_name]['promo']}) reconnu à {datetime.now().strftime('%H:%M:%S')}")
+            # Update the last seen time
+            known_faces[best_name]["lastSeen"] = datetime.now()
 
         # Dessin sur l'image
         x1, y1, x2, y2 = face.bbox.astype(int)
