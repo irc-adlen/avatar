@@ -16,3 +16,10 @@ To install them, you have to execute this :
 ```bash
 pip install -r requirements.txt
 ```
+
+### check the code
+
+Ruff helps to check the code integrity and unused imports.
+```bash
+ruff check ./firstTest.py
+```

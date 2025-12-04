@@ -1,6 +1,5 @@
 import cv2
 import numpy as np
-import insightface
 from datetime import datetime, timedelta
 from insightface.app import FaceAnalysis
 
