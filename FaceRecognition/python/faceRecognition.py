@@ -4,7 +4,8 @@ from datetime import datetime, timedelta
 from insightface.app import FaceAnalysis
 import os
 import psycopg2
-from psycopg2 import sql
+from dotenv import load_dotenv, find_dotenv
+
 
 # Initialise l'application InsightFace
 # "buffalo_l" contient SCRFD pour la détection et ArcFace pour l'embedding
@@ -13,13 +14,20 @@ app = FaceAnalysis(name="buffalo_l", providers=["ROCMExecutionProvider"]) # For 
 # app = FaceAnalysis(name="buffalo_l") # Let ONNX Runtime choose the best available provider
 app.prepare(ctx_id=0, det_size=(640, 640))  # ctx_id=0 = CPU, -1 = auto
 
+# Load .env file for DB connection
+env_path = find_dotenv()
+if not env_path:
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(env_path)
 # --- Database connection setup -------------------------------------------------
 # Read DB connection info from environment variables (defaults match docker-compose)
-DB_HOST = os.environ.get("DB_HOST", "db")
-DB_PORT = int(os.environ.get("DB_PORT", 5432))
-DB_NAME = os.environ.get("DB_NAME", "facedb")
-DB_USER = os.environ.get("DB_USER", "faceuser")
-DB_PASS = os.environ.get("DB_PASS", "facepass")
+DB_HOST = "db"
+DB_PORT = 5432
+DB_NAME = os.environ.get("DB_NAME")
+DB_USER = os.environ.get("DB_USER")
+DB_PASS = os.environ.get("DB_PASS")
+
+print(f"Loaded env from: {env_path}")
 
 def get_db_conn():
     conn = psycopg2.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
@@ -126,13 +134,14 @@ while True:
             
         if best_name != "Inconnu":
             # Check if the last time seen is in the last 5 minutes
-            if known_faces[best_name]["lastSeen"] is None or datetime.now() - known_faces[best_name]["lastSeen"] > timedelta(seconds=10):
+            if known_faces[best_name]["lastSeen"] is None or datetime.now() - known_faces[best_name]["lastSeen"] > timedelta(minutes=1):
                 print(f"{best_name} ({known_faces[best_name]['promo']}) reconnu à {datetime.now().strftime('%H:%M:%S')}")
             # Insert a detection record into Postgres
-            try:
-                update_detection(best_name, known_faces[best_name]['promo'], datetime.now())
-            except Exception as e:
-                print("Error inserting detection:", e)
+            if datetime.now() - known_faces[best_name]["lastSeen"] > timedelta(seconds=10):
+                try:
+                    update_detection(best_name, known_faces[best_name]['promo'], datetime.now())
+                except Exception as e:
+                    print("Error inserting detection:", e)
             # Update the last seen time
             known_faces[best_name]["lastSeen"] = datetime.now()
 

@@ -16,6 +16,8 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix
       # Bind-mount local source for hot-reload during development
       - ./python:/app:rw
+      # Mount host .env (one level above FaceRecognition) into container
+      - .env:/app/.env
       # Persist insightface models so they aren't re-downloaded every start
       - insightface_models:/root/.insightface/models
     # Some systems need privileged to access webcam devices; remove if not required.
@@ -27,11 +29,11 @@ services:
   db:
     image: postgres:15
     environment:
-      POSTGRES_USER: faceuser
-      POSTGRES_PASSWORD: facepass
-      POSTGRES_DB: facedb
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ./pgdata:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "5432:5432"

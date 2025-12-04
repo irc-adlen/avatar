@@ -23,3 +23,25 @@ Ruff helps to check the code integrity and unused imports.
 ```bash
 ruff check ./firstTest.py
 ```
+
+# Docker
+
+All the project can be run using Docker.
+It currently contains two Dockers.
+Both can be run with the [docker compose](./docker-compose.yml)
+
+### set up the env 
+
+You have to rename the [.env-exemple](./.env-exemple) file to `.env`.
+Then create your own variables.
+```bash
+mv .env-exemple .env
+```
+
+### run the Dockers
+
+```bash
+docker compose up
+```
+
+A window with your camera should pop displaying the camera and the pepeole that have been recognized.
