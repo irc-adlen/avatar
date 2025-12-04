@@ -11,6 +11,6 @@ CREATE TABLE IF NOT EXISTS people (
 
 -- Insert two sample rows corresponding to the images copied into the faceapp image
 INSERT INTO people (name, promo, image_path) VALUES
-  ('Mathis', '5IRC', '/faces/mathis.jpeg'),
-  ('Clem', '4IRC', '/faces/clem.jpeg')
+  ('Mathis', '5IRC', './faces/mathis.jpeg'),
+  ('Clem', '4IRC', './faces/clem.jpeg')
 ON CONFLICT DO NOTHING;
