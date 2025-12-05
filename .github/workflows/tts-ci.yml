@@ -1,0 +1,34 @@
+name: TTS CI
+
+on:
+  push:
+    paths:
+      - 'TTS/**'
+  pull_request:
+    paths:
+      - 'TTS/**'
+
+jobs:
+  build-tts-image:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Build Docker image (context: TTS/)
+      run: |
+        docker build -t piper-tts:tts-ci ./TTS
+
+    - name: Run pip check inside container (smoke test)
+      run: |
+        docker run --rm piper-tts:tts-ci python3 -m pip check
+
+    - name: Optional - run server smoke (skip voice download)
+      run: |
+        # Start container in background but do not download voices (fast). The container's entrypoint starts the server.
+        docker run -d --name piper-tts-test -e SKIP_VOICE_DOWNLOAD=1 -p 5500:5000 piper-tts:tts-ci || true
+        # Wait a few seconds for server to come up, then check root (no auth expected)
+        sleep 3
+        set -o pipefail; curl --fail -sS http://localhost:5500/ || true
+        docker rm -f piper-tts-test || true
