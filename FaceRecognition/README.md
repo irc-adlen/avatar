@@ -1,4 +1,10 @@
-# Install & Setup
+# Add new detecable person
+
+To detect someone, the script needs two things :
+- Add a picture of the person you want to recognize in the [faces](./python/faces/) folder.
+- Before creating the postgres Docker for the first time, change the [init.sql](./postgres/init.sql) by adding your target informations. If the Docker has already been run, access it with pgAdmin add insert data in the *people* table.
+
+# Install & Setup locally
 
 ### python venv
 

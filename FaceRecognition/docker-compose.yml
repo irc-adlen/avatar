@@ -22,7 +22,6 @@ services:
       - insightface_models:/root/.insightface/models
     # Some systems need privileged to access webcam devices; remove if not required.
     privileged: true
-    restart: unless-stopped
     # If you prefer using host networking (may simplify device access), uncomment:
     # network_mode: "host"
 
