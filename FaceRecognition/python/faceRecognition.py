@@ -61,11 +61,6 @@ def update_detection(name, promo, lastseen):
         print("DB insert error:", e)
 
 def select_allPeople():
-    """Return all rows from the `people` table as a list of dicts.
-
-    If the table does not exist or an error occurs, prints the error and
-    returns an empty list.
-    """
     try:
         conn = get_db_conn()
         cur = conn.cursor()
@@ -98,16 +93,16 @@ try:
 except Exception as e:
     print("Warning: could not connect to DB at startup:", e)
 
-# Distance cosinus entre deux embeddings
+# Cosine distance between two embeddings
 def cosine_similarity(a, b):
     a_norm = a / np.linalg.norm(a)
     b_norm = b / np.linalg.norm(b)
     return np.dot(a_norm, b_norm)
 
-# --- Lecture webcam ---
+# Webcam capture
 cap = cv2.VideoCapture(0)
 
-THRESHOLD = 0.3  # seuil typique pour ArcFace (plus proche de 1 = plus strict)
+THRESHOLD = 0.3  # seil to recognize face
 
 while True:
     ret, frame = cap.read()
