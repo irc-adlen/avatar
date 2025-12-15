@@ -1,0 +1,7 @@
+insightface
+opencv-python
+numpy
+onnxruntime
+onnxruntime-rocm
+psycopg2-binary
+python-dotenv

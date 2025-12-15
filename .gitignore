@@ -1,1 +1,6 @@
 .venv/
+#Face Recognition
+.ruff_cache
+faceRecognitionEnv/
+.env
+pgdata/
