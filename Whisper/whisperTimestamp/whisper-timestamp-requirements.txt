@@ -1,0 +1,6 @@
+whisper-timestamped
+matplotlib
+onnxruntime
+torchaudio
+transformers
+flask 

@@ -5,5 +5,8 @@ faceRecognitionEnv/
 pgdata/
 #Whisper
 venvWhisper
+venvWhisperTimestamp
 __pycache__
 whisper.cpp
+*.wav*
+*.m4a
