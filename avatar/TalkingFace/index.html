@@ -27,6 +27,32 @@
 
     let head;
 
+    async function speakWithLocalTTS(text) {
+      const res = await fetch("http://localhost:5003/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
+
+      const audioBlob = await res.blob();
+
+      // 🔑 Blob -> ArrayBuffer
+      const arrayBuffer = await audioBlob.arrayBuffer();
+
+      // 🔑 ArrayBuffer -> AudioBuffer (OBLIGATOIRE)
+      const audioBuffer = await head.audioCtx.decodeAudioData(arrayBuffer);
+
+      console.log("Decoded AudioBuffer:", audioBuffer);
+
+      // 🔊 PLAY + 👄 LIPSYNC
+      await head.speakAudio({
+        audio: audioBuffer
+      }, {
+        lipsyncLang: "en"
+      });
+    }
+
+
     document.addEventListener('DOMContentLoaded', async function(e) {
 
       // Instantiate the class
@@ -65,16 +91,19 @@
 
       // Speak when clicked
       const nodeSpeak = document.getElementById('speak');
-      nodeSpeak.addEventListener('click', function () {
-        try {
-          const text = document.getElementById('text').value;
-          if ( text ) {
-            head.speakText( text );
+      nodeSpeak.addEventListener('click', async () => {
+        const text = document.getElementById('text').value;
+        if (text) {
+          if (head.audioCtx.state !== "running") {
+            await head.audioCtx.resume();
+            console.log("AudioContext resumed");
           }
-        } catch (error) {
-          console.log(error);
+
+          head.start(); // OK maintenant
+          await speakWithLocalTTS(text);
         }
       });
+
 
       // Pause animation when document is not visible
       document.addEventListener("visibilitychange", async function (ev) {
