@@ -3,3 +3,7 @@
 faceRecognitionEnv/
 .env
 pgdata/
+#Whisper
+venvWhisper
+__pycache__
+whisper.cpp
