@@ -6,8 +6,8 @@ services:
     tty: true
 
     environment:
-      - WHISPER_MODEL=base
-      - PULSE_SERVER=unix:/run/user/1000/pulse/native
+      WHISPER_MODEL: ${WHISPER_MODEL:-base}
+      PULSE_SERVER: unix:/run/user/1000/pulse/native
 
     devices:
       - /dev/snd
