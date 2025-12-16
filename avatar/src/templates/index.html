@@ -56,7 +56,7 @@
       // 2️⃣ Whisper
       const formData = new FormData();
       formData.append("audio", audioBlob);
-      const res2 = await fetch("http://localhost:5004/api/word_timestamp", {
+      const res2 = await fetch("http://localhost:5003/stt", {
         method: "POST",
         body: formData
       });
