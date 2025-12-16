@@ -1,13 +1,25 @@
+version: "3.9"
+
 services:
   whisper:
-    image: whisper-mic
-    container_name: whisper-mic
+    image: whisper-mic-gpu
+    container_name: whisper-mic-gpu
     stdin_open: true
     tty: true
 
     environment:
       WHISPER_MODEL: ${WHISPER_MODEL:-base}
       PULSE_SERVER: unix:/run/user/1000/pulse/native
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
     devices:
       - /dev/snd

@@ -1,8 +1,6 @@
-FROM ubuntu:22.04
+FROM nvidia/cuda:12.2.0-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
-
-# Default model (can be overridden at runtime)
 ENV WHISPER_MODEL=base
 
 RUN apt-get update && apt-get install -y \
@@ -19,18 +17,17 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Clone whisper.cpp
 RUN git clone https://github.com/ggml-org/whisper.cpp.git
 WORKDIR /app/whisper.cpp
 
-# Download ALL models script (model chosen at runtime)
 RUN chmod +x ./models/download-ggml-model.sh
 
-# Build with SDL2 support
-RUN cmake -B build -DWHISPER_SDL2=ON \
+# 🔥 Build avec CUDA
+RUN cmake -B build \
+    -DWHISPER_SDL2=ON \
+    -DGGML_CUDA=ON \
     && cmake --build build -j --config Release
 
-# Entrypoint script
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
