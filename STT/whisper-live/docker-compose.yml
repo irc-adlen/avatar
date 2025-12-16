@@ -1,0 +1,17 @@
+services:
+  whisper:
+    image: whisper-mic
+    container_name: whisper-mic
+    stdin_open: true
+    tty: true
+
+    environment:
+      - WHISPER_MODEL=base
+      - PULSE_SERVER=unix:/run/user/1000/pulse/native
+
+    devices:
+      - /dev/snd
+
+    volumes:
+      - /run/user/1000/pulse/native:/run/user/1000/pulse/native
+      - ~/.config/pulse/cookie:/root/.config/pulse/cookie:ro

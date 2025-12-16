@@ -70,7 +70,7 @@ We can run the code as followed
 Run the docker using
 
 ```
-docker build -t whisper-mic 0.
+docker build -t whisper-mic .
 ```
 
 ```
