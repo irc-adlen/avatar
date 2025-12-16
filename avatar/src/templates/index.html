@@ -27,29 +27,60 @@
 
     let head;
 
+    function whisperToTalkingHead(json) {
+      const words = [];
+      const wtimes = [];
+      const wdurations = [];
+
+      json.segments.forEach(segment => {
+        segment.words.forEach(word => {
+          words.push(word.text);
+          wtimes.push(word.start * 1000);           // convertir secondes → ms
+          wdurations.push((word.end - word.start) * 1000);
+        });
+      });
+
+      return { words, wtimes, wdurations };
+    }
+
+
     async function speakWithLocalTTS(text) {
+      // 1️⃣ TTS
       const res = await fetch("http://localhost:5003/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text })
       });
-
       const audioBlob = await res.blob();
 
-      // 🔑 Blob -> ArrayBuffer
-      const arrayBuffer = await audioBlob.arrayBuffer();
+      // 2️⃣ Whisper
+      const formData = new FormData();
+      formData.append("audio", audioBlob);
+      const res2 = await fetch("http://localhost:5004/api/word_timestamp", {
+        method: "POST",
+        body: formData
+      });
+      const whisperJSON = await res2.json();
 
-      // 🔑 ArrayBuffer -> AudioBuffer (OBLIGATOIRE)
+      // 3️⃣ Décode audio
+      const arrayBuffer = await audioBlob.arrayBuffer();
       const audioBuffer = await head.audioCtx.decodeAudioData(arrayBuffer);
 
-      console.log("Decoded AudioBuffer:", audioBuffer);
+      // 4️⃣ Transformer Whisper → TalkingHead
+      const { words, wtimes, wdurations } = whisperToTalkingHead(whisperJSON);
 
-      // 🔊 PLAY + 👄 LIPSYNC
-      await head.speakAudio({
-        audio: audioBuffer
-      }, {
-        lipsyncLang: "en"
-      });
+      // 5️⃣ Préparer l'objet TalkingHead
+      const audioObj = {
+        audio: audioBuffer,
+        words,
+        wtimes,
+        wdurations,
+        markers: [],
+        mtimes: []
+      };
+
+      // 6️⃣ Jouer + lipsync
+      await head.speakAudio(audioObj, { lipsyncLang: "en" });
     }
 
 

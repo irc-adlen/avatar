@@ -1,0 +1,12 @@
+version: "3.9"
+
+services:
+  avatar:
+    image: avatar
+    ports:
+      - "5003:5003"
+
+  tts:
+    image: tts
+    ports:
+      - "5002:5002"

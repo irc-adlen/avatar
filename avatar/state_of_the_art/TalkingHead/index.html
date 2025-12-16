@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Talking Head - minimal example</title>
+
+  <style>
+    body, html { width:100%; height:100%; max-width: 800px; margin: auto; position: relative; background-color: #202020; color: white; }
+    #avatar { display: block; width:100%; height:100%; }
+    #controls { display: block; position: absolute; top: 10px; left: 10px; right: 10px; height: 50px; }
+    #text { position: absolute; width: Calc( 100% - 110px ); height: 100%; top: 0; left: 0; bottom: 0; right: 110px; font-family: Arial; font-size: 20px; }
+    #speak { display: block; position: absolute; top: 0; bottom: 0; right: 0; height: 100%; width: 100px; font-family: Arial; font-size: 20px; }
+    #loading { display: block; position: absolute; bottom: 10px; left: 10px; right: 10px; height: 50px; font-family: Arial; font-size: 20px; }
+  </style>
+
+  <script type="importmap">
+  { "imports":
+    {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js/+esm",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+      "talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.5/modules/talkinghead.mjs"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import { TalkingHead } from "talkinghead";
+
+    let head;
+
+    function whisperToTalkingHead(json) {
+      const words = [];
+      const wtimes = [];
+      const wdurations = [];
+
+      json.segments.forEach(segment => {
+        segment.words.forEach(word => {
+          words.push(word.text);
+          wtimes.push(word.start * 1000);           // convertir secondes → ms
+          wdurations.push((word.end - word.start) * 1000);
+        });
+      });
+
+      return { words, wtimes, wdurations };
+    }
+
+
+    async function speakWithLocalTTS(text) {
+      // 1️⃣ TTS
+      const res = await fetch("http://localhost:5003/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
+      const audioBlob = await res.blob();
+
+      // 2️⃣ Whisper
+      const formData = new FormData();
+      formData.append("audio", audioBlob);
+      const res2 = await fetch("http://localhost:5004/api/word_timestamp", {
+        method: "POST",
+        body: formData
+      });
+      const whisperJSON = await res2.json();
+
+      // 3️⃣ Décode audio
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const audioBuffer = await head.audioCtx.decodeAudioData(arrayBuffer);
+
+      // 4️⃣ Transformer Whisper → TalkingHead
+      const { words, wtimes, wdurations } = whisperToTalkingHead(whisperJSON);
+
+      // 5️⃣ Préparer l'objet TalkingHead
+      const audioObj = {
+        audio: audioBuffer,
+        words,
+        wtimes,
+        wdurations,
+        markers: [],
+        mtimes: []
+      };
+
+      // 6️⃣ Jouer + lipsync
+      await head.speakAudio(audioObj, { lipsyncLang: "en" });
+    }
+
+
+    document.addEventListener('DOMContentLoaded', async function(e) {
+
+      // Instantiate the class
+      // NOTE: Never put your API key in a client-side code unless you know
+      //       that you are the only one to have access to that code!
+      const nodeAvatar = document.getElementById('avatar');
+      head = new TalkingHead( nodeAvatar, {
+        ttsEndpoint: "https://eu-texttospeech.googleapis.com/v1beta1/text:synthesize",
+        ttsApikey: "AIzaSyDDRrScM3t-ko-5s-YCapCxdw5O0E52Hf0", // <- Change this
+        lipsyncModules: ["en", "fi"],
+        cameraView: "upper"
+      });
+
+      // Load and show the avatar
+      const nodeLoading = document.getElementById('loading');
+      try {
+        nodeLoading.textContent = "Loading...";
+        await head.showAvatar( {
+          url: 'https://models.readyplayer.me/693fc00c14ff705000213c26.glb?morphTargets=ARKit,Oculus+Visemes,mouthOpen,mouthSmile,eyesClosed,eyesLookUp,eyesLookDown&textureSizeLimit=1024&textureFormat=png',
+          body: 'F',
+          avatarMood: 'neutral',
+          ttsLang: "en-GB",
+          ttsVoice: "en-GB-Standard-A",
+          lipsyncLang: 'en'
+        }, (ev) => {
+          if ( ev.lengthComputable ) {
+            let val = Math.min(100,Math.round(ev.loaded/ev.total * 100 ));
+            nodeLoading.textContent = "Loading " + val + "%";
+          }
+        });
+        nodeLoading.style.display = 'none';
+      } catch (error) {
+        console.log(error);
+        nodeLoading.textContent = error.toString();
+      }
+
+      // Speak when clicked
+      const nodeSpeak = document.getElementById('speak');
+      nodeSpeak.addEventListener('click', async () => {
+        const text = document.getElementById('text').value;
+        if (text) {
+          if (head.audioCtx.state !== "running") {
+            await head.audioCtx.resume();
+            console.log("AudioContext resumed");
+          }
+
+          head.start(); // OK maintenant
+          await speakWithLocalTTS(text);
+        }
+      });
+
+
+      // Pause animation when document is not visible
+      document.addEventListener("visibilitychange", async function (ev) {
+        if (document.visibilityState === "visible") {
+          head.start();
+        } else {
+          head.stop();
+        }
+      });
+
+    });
+
+  </script>
+</head>
+
+<body>
+  <div id="avatar"></div>
+  <div id="controls">
+    <input id="text" type="text" value="Hi there. How are you? I'm fine.">
+    <input id="speak" type="button" value="Speak">
+  </div>
+  <div id="loading"></div>
+</body>
+
+</html>

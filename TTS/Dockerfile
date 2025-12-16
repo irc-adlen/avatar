@@ -16,10 +16,8 @@ COPY . /app
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-EXPOSE 5000
-
 ENV VOICE=fr_FR-tom-medium
 ENV DATA_DIR=/app/voices
-ENV PORT=5000
+ENV PORT=5002
 
 ENTRYPOINT ["/entrypoint.sh"]
