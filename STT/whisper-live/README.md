@@ -64,3 +64,20 @@ We can run the code as followed
   -fa,      --flash-attn    [true   ] enable flash attention during inference
   -nfa,     --no-flash-attn [false  ] disable flash attention during inference
 ```
+
+# Docker
+
+Run the docker using
+
+```
+docker build -t whisper-mic 0.
+```
+
+```
+docker run -it --rm \
+    --device /dev/snd \
+    -e PULSE_SERVER=unix:/run/user/1000/pulse/native \
+    -v /run/user/1000/pulse/native:/run/user/1000/pulse/native \
+    -v ~/.config/pulse/cookie:/root/.config/pulse/cookie:ro \
+    whisper-mic
+```
