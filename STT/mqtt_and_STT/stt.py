@@ -1,33 +1,26 @@
 import subprocess
+import logging
 import paho.mqtt.client as mqtt
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
 MQTT_BROKER = "mosquitto"
+MQTT_PORT = 1883
 MQTT_TOPIC = "stt/start"
-
-
-def extract_text(lines):
-    """
-    Keep only real transcription lines
-    """
-    result = []
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        if line.startswith("["):
-            continue
-        if "whisper" in line.lower():
-            continue
-        result.append(line)
-    return " ".join(result)
+logger = logging.getLogger(__name__)
 
 
 def run_stt():
     """
     Launch whisper.cpp Docker container and return the transcribed text
     """
+    logger.info("Starting STT process")
+
     cmd = [
-        "docker", "run", "--rm", "-it",
+        "docker", "run", "--rm",
         "--gpus", "all",
         "--device", "/dev/snd",
         "whisper-gpu",
@@ -40,32 +33,25 @@ def run_stt():
         text=True
     )
 
-
-
-    return extract_text(process.stdout)
+    output, _ = process.communicate()
+    return output
 
 
 def on_message(client, userdata, msg):
-    print("MQTT trigger received")
+    logger.info("MQTT trigger received")
 
     text = run_stt()
-
-    print("STT result:", text)
-
-    # Here you can:
-    # - publish the result to another MQTT topic
-    # - feed an LLM
-    # - trigger a TTS
-    # - etc.
+    logger.info(f"STT result: {text}")
 
 
 def main():
-    client = mqtt.Client()
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     client.on_message = on_message
-    client.connect(MQTT_BROKER)
+
+    client.connect(MQTT_BROKER, MQTT_PORT, 60)
     client.subscribe(MQTT_TOPIC)
 
-    print("Waiting for MQTT trigger...")
+    logger.info("Waiting for MQTT trigger...")
     client.loop_forever()
 
 
