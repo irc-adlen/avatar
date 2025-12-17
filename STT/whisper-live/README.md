@@ -44,6 +44,10 @@ cmake --build build -j --config Release
 ```
 ./build/bin/whisper-stream -m ./models/ggml-base.bin -l fr -t 8
 ```
+### Special options
+```
+./build/bin/whisper-stream -m ./models/ggml-base.bin -l fr -t 8 -ps -mt 64
+```
 
 
 #### Options

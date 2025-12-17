@@ -45,4 +45,4 @@ RUN cmake --build build -j$(nproc)
 
 
 # Default command: start real-time streaming in French
-CMD ["./build/bin/whisper-stream", "-m", "./models/ggml-medium.bin", "-l", "fr", "-t", "8"]
+CMD ["./build/bin/whisper-stream", "-m", "./models/ggml-medium.bin", "-l", "fr", "-t", "8", "-mt", "64"]
