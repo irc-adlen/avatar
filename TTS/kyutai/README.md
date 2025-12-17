@@ -1,8 +1,4 @@
-Here is a comprehensive README guide in English, summarizing everything we have set up. It includes the specific fixes for your hardware (RTX 3090, high CPU core count) to ensure it runs fast and stable.
-
----
-
-# Moshi TTS - Local High-Performance Setup Guide
+# Setup Guide
 
 This guide details how to set up a local, offline, and low-latency text-to-speech server using Moshi/Kyutai. It is optimized for NVIDIA GPUs.
 
