@@ -10,8 +10,8 @@ logging.basicConfig(
 MQTT_BROKER = "mosquitto"
 MQTT_PORT = 1883
 MQTT_TOPIC = "stt/start"
-PROJECT_PATH = "/workspace/output"
-WHISPER_CONTAINER_PATH = "/opt/output"
+PROJECT_PATH = "/home/avatar/output"
+WHISPER_CONTAINER_PATH = "/opt/whisper.cpp/output"
 logger = logging.getLogger(__name__)
 
 
@@ -26,7 +26,7 @@ def run_stt():
         "--gpus", "all",
         "--device", "/dev/snd",
         "-v", f"{PROJECT_PATH}:{WHISPER_CONTAINER_PATH}",
-        "whisper-gpu",
+        "whisper-mic-gpu",
     ]
 
     process = subprocess.Popen(

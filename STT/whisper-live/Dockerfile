@@ -35,4 +35,4 @@ RUN ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/lib
     cmake --build build -j --config Release
 
 # Default command
-CMD ["./build/bin/whisper-stream", "-m", "./models/ggml-medium.bin", "-l", "fr", "-t", "8", "-mt", "64", "-c", "3", "-f", "../output/textoutput.txt"]
+CMD ["./build/bin/whisper-stream", "-m", "./models/ggml-medium.bin", "-l", "fr", "-t", "8", "-mt", "64", "-c", "3", "-f", "/opt/whisper.cpp/output/textoutput.txt"]

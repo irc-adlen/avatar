@@ -9,7 +9,6 @@ services:
     networks:
       - mqtt
     volumes:
-      - ./output:/workspace/output
       - /var/run/docker.sock:/var/run/docker.sock
 
 
