@@ -14,6 +14,14 @@ RUN apt-get update && apt-get install -y \
     curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+    git \
+    cmake \
+    build-essential \
+    libsdl2-dev \
+    ffmpeg \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /opt
@@ -29,10 +37,13 @@ RUN sh ./models/download-ggml-model.sh medium
 # Configure the build with CUDA and SDL2 support
 RUN cmake -B build -DGGML_CUDA=1 -DWHISPER_SDL2=ON
 
+# --- CORRECTION DÉFINITIVE ---
 # Build whisper.cpp
+# 1. Création du lien symbolique (libcuda.so.1 -> libcuda.so)
+# 2. On définit LD_LIBRARY_PATH pour que le linker trouve la dépendance transitive
 RUN ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1 && \
     export LD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs:$LD_LIBRARY_PATH && \
     cmake --build build -j --config Release
 
 # Default command
-CMD ["./build/bin/whisper-stream", "-m", "./models/ggml-medium.bin", "-l", "fr", "-t", "8", "-mt", "64", "-c", "3", "-f", "/opt/whisper.cpp/output/textoutput.txt"]
+CMD ["./build/bin/whisper-stream", "-m", "./models/ggml-medium.bin", "-l", "fr", "-t", "8", "-mt", "64", "-c", "3"]
