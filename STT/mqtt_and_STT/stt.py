@@ -10,6 +10,8 @@ logging.basicConfig(
 MQTT_BROKER = "mosquitto"
 MQTT_PORT = 1883
 MQTT_TOPIC = "stt/start"
+PROJECT_PATH = "/workspace/output"
+WHISPER_CONTAINER_PATH = "/opt/output"
 logger = logging.getLogger(__name__)
 
 
@@ -23,6 +25,7 @@ def run_stt():
         "docker", "run", "--rm",
         "--gpus", "all",
         "--device", "/dev/snd",
+        "-v", f"{PROJECT_PATH}:{WHISPER_CONTAINER_PATH}",
         "whisper-gpu",
     ]
 
