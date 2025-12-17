@@ -32,17 +32,19 @@ cmake -B build -DWHISPER_SDL2=ON
 cmake --build build -j --config Release
 ```
 
-We can run the code as followed
-
-```
-./build/bin/whisper-stream -m ./models/ggml-base.bin -l fr -t 8
-```
-
 ### Build real-time with GPU
 ```
 cmake -B build -DGGML_CUDA=1 -DWHISPER_SDL2=ON
 cmake --build build -j --config Release
 ```
+
+
+### Run the code
+
+```
+./build/bin/whisper-stream -m ./models/ggml-base.bin -l fr -t 8
+```
+
 
 #### Options
 ```
