@@ -11,3 +11,6 @@ __pycache__
 whisper.cpp
 *.wav*
 *.m4a
+mqtt-venv
+mosquitto/data/
+mosquitto/log/
