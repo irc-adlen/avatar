@@ -16,3 +16,5 @@ STT/*/mosquitto/log/
 .venv
 model/
 STT/adlenetmoiuwu.wav
+
+venv_moshi/
