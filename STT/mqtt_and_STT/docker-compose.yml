@@ -10,6 +10,21 @@ services:
       - mqtt
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./records:/app/records
+      - ./cacheHuggingFace:/root/.cache/huggingface
+    devices:
+      - /dev/snd:/dev/snd
+    group_add:
+      - "audio"
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
 
 
   mosquitto:
