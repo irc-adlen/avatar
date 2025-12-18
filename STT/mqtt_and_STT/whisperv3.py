@@ -1,5 +1,6 @@
 import torch
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
+import requests
 
 def transcribe_audio(path_to_audio_file):
     print("CUDA available:", torch.cuda.is_available())
@@ -30,3 +31,10 @@ def transcribe_audio(path_to_audio_file):
     result = pipe(path_to_audio_file)
     print("transcription complete")
     print(result["text"])
+    url = 'http://host.docker.internal:8000/chat'
+    myobj = {
+           "prompt": result["text"],
+           "voice": "default_voice.wav"
+         }
+
+    x = requests.post(url, json = myobj)
