@@ -3,6 +3,8 @@ import logging
 import threading
 import time
 import paho.mqtt.client as mqtt
+from voice_recorder import start_recording
+from whisperv3 import transcribe_audio
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,73 +21,11 @@ WHISPER_CONTAINER_NAME = "whisper_stt_container"
 
 logger = logging.getLogger(__name__)
 
-
-def run_whisper_container():
-    """
-    Launch whisper.cpp Docker container and return the transcribed text
-    """
-    logger.info("Starting Whisper container")
-
-    cmd = [
-        "docker", "run", "--rm",
-        "--name", WHISPER_CONTAINER_NAME,  # Container name for easy stop
-        "--gpus", "all",
-        "--device", "/dev/snd",
-        "-v", f"{PROJECT_PATH}:{WHISPER_CONTAINER_PATH}",
-        "whisper-mic-gpu",
-    ]
-
-    process = subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True
-    )
-
-    output, _ = process.communicate()
-    logger.info("Whisper container finished")
-
-    return output
-
-
-def stop_container_after_delay(delay_seconds: int):
-    """
-    Wait for a given delay and stop the Whisper container
-    """
-    logger.info(f"Stop thread started, waiting {delay_seconds} seconds")
-    time.sleep(delay_seconds)
-
-    logger.info("Stopping Whisper container")
-    subprocess.run(
-        ["docker", "stop", WHISPER_CONTAINER_NAME],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
-    )
-
-
 def run_stt_with_timeout():
-    """
-    Run STT with a watchdog thread that stops the container after 10 seconds
-    """
-    # Thread that runs the Whisper container
-    whisper_thread = threading.Thread(
-        target=run_whisper_container,
-        name="WhisperThread"
-    )
-
-    # Thread that stops the container after 10 seconds
-    stop_thread = threading.Thread(
-        target=stop_container_after_delay,
-        args=(10,),
-        name="WhisperStopThread"
-    )
-
-    whisper_thread.start()
-    stop_thread.start()
-
-    whisper_thread.join()
-    stop_thread.join()
-
+    record_path = start_recording()
+    print("Recording saved at:", record_path)
+    print("Starting transcription...")
+    transcribe_audio(record_path)
 
 def on_message(client, userdata, msg):
     logger.info("MQTT trigger received")

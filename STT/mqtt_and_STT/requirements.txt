@@ -1,1 +1,6 @@
 paho-mqtt
+sounddevice
+numpy
+scipy
+transformers
+accelerate

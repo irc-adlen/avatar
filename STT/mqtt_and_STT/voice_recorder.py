@@ -4,7 +4,7 @@ from scipy.io.wavfile import write
 import time
 
 # Audio configuration
-SAMPLE_RATE = 16000
+SAMPLE_RATE = 44100
 CHANNELS = 1
 BLOCK_DURATION = 0.1  # seconds
 SILENCE_THRESHOLD = 0.01  # volume threshold
@@ -14,6 +14,49 @@ audio_buffer = []
 silence_time = 0.0
 
 hasStopped = False
+
+
+def start_recording():
+    global hasStopped
+    global audio_buffer
+    global silence_time
+
+    hasStopped = False
+    audio_buffer = []
+    silence_time = 0.0
+
+    print(sd.query_devices())
+    print("Default input device:", sd.default.device)
+
+    print("Recording... Speak now")
+
+    try:
+        with sd.InputStream(
+            device=CHANNELS,
+            samplerate=SAMPLE_RATE,
+            channels=1,
+            callback=audio_callback,
+            blocksize=int(SAMPLE_RATE * BLOCK_DURATION),
+            dtype="float32"
+        ):
+            while not hasStopped:
+                time.sleep(0.1)
+
+    except sd.CallbackStop:
+        print("Silence detected, stopping recording")
+
+
+    print("Recording stopped due to silence")
+
+    # Concatenate all recorded blocks
+    audio = np.concatenate(audio_buffer, axis=0)
+
+    # Save to WAV file
+    write("records/recording.wav", SAMPLE_RATE, audio)
+
+    print("Audio saved as recording.wav")
+
+    return "records/recording.wav"
 
 def audio_callback(indata, frames, time_info, status):
     global silence_time
@@ -39,29 +82,4 @@ def audio_callback(indata, frames, time_info, status):
         print(hasStopped)
         raise sd.CallbackStop()
 
-print("Recording... Speak now")
 
-try:
-    with sd.InputStream(
-        samplerate=SAMPLE_RATE,
-        channels=CHANNELS,
-        callback=audio_callback,
-        blocksize=int(SAMPLE_RATE * BLOCK_DURATION)
-    ):
-        while not hasStopped:
-            print(hasStopped)
-            time.sleep(0.1)
-
-except sd.CallbackStop:
-    print("Silence detected, stopping recording")
-
-
-print("Recording stopped due to silence")
-
-# Concatenate all recorded blocks
-audio = np.concatenate(audio_buffer, axis=0)
-
-# Save to WAV file
-write("recording.wav", SAMPLE_RATE, audio)
-
-print("Audio saved as recording.wav")

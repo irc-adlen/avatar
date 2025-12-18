@@ -10,6 +10,12 @@ services:
       - mqtt
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./records:/app/records
+      - ./cacheHuggingFace:/root/.cache/huggingface
+    devices:
+      - /dev/snd:/dev/snd
+    group_add:
+      - "audio"
 
 
   mosquitto:
