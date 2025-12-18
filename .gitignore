@@ -12,6 +12,7 @@ whisper.cpp
 *.m4a
 STT/*/mosquitto/data/
 STT/*/mosquitto/log/
+venvSilence
 #TTS
 .venv
 model/
