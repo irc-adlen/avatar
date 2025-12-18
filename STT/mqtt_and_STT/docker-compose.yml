@@ -16,6 +16,14 @@ services:
       - /dev/snd:/dev/snd
     group_add:
       - "audio"
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
 
   mosquitto:

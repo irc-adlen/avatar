@@ -1,18 +1,23 @@
-FROM python:3.12-slim
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install docker CLI and audio dependencies for microphone access
+# System dependencies
 RUN apt-get update && \
-    apt-get install -y docker.io portaudio19-dev ffmpeg alsa-utils && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get install -y \
+        python3 \
+        python3-pip \
+        ffmpeg \
+        portaudio19-dev \
+        alsa-utils \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install
-COPY ./requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Python deps
+COPY requirements.txt .
+RUN pip install --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
 # Copy application
 COPY ./stt.py ./stt.py

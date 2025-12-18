@@ -2,6 +2,9 @@ import torch
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 
 def transcribe_audio(path_to_audio_file):
+    print("CUDA available:", torch.cuda.is_available())
+    print("CUDA device:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU")
+    print(path_to_audio_file)
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     print("Using device:", device)
     dtype = torch.float16 if torch.cuda.is_available() else torch.float32
