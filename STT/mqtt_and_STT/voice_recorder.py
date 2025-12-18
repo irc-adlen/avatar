@@ -11,6 +11,8 @@ BLOCK_DURATION = 0.1  # seconds
 SILENCE_THRESHOLD = 0.01  # volume threshold
 MAX_SILENCE_DURATION = 1.5  # seconds before stopping
 
+has_talk = False
+
 audio_buffer = []
 silence_time = 0.0
 
@@ -21,10 +23,12 @@ def start_recording():
     global hasStopped
     global audio_buffer
     global silence_time
+    global has_talk
 
     hasStopped = False
     audio_buffer = []
     silence_time = 0.0
+    has_talk = False
 
     print(sd.query_devices())
     print("Default input device:", sd.default.device)
@@ -62,6 +66,7 @@ def start_recording():
 def audio_callback(indata, frames, time_info, status):
     global silence_time
     global hasStopped
+    global has_talk
     # Convert audio block to numpy array
     audio_data = indata.copy()
     audio_buffer.append(audio_data)
@@ -71,8 +76,11 @@ def audio_callback(indata, frames, time_info, status):
 
     if rms < SILENCE_THRESHOLD:
         print(f"Silence detected (RMS: {rms:.5f})")
-        silence_time += BLOCK_DURATION
+        if has_talk:
+            silence_time += BLOCK_DURATION
+            
     else:
+        has_talk = True
         print(f"Sound detected (RMS: {rms:.5f})")
         silence_time = 0.0
 
