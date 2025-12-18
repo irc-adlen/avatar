@@ -26,6 +26,7 @@ def run_stt_with_timeout():
     print("Recording saved at:", record_path)
     print("Starting transcription...")
     transcribe_audio(record_path)
+    return
 
 def on_message(client, userdata, msg):
     logger.info("MQTT trigger received")

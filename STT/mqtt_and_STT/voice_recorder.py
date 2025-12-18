@@ -4,8 +4,9 @@ from scipy.io.wavfile import write
 import time
 
 # Audio configuration
-SAMPLE_RATE = 44100
+SAMPLE_RATE = 48000
 CHANNELS = 1
+INPUT_DEVICE = 4
 BLOCK_DURATION = 0.1  # seconds
 SILENCE_THRESHOLD = 0.01  # volume threshold
 MAX_SILENCE_DURATION = 1.5  # seconds before stopping
@@ -32,9 +33,9 @@ def start_recording():
 
     try:
         with sd.InputStream(
-            device=CHANNELS,
+            device=INPUT_DEVICE,
             samplerate=SAMPLE_RATE,
-            channels=1,
+            channels=CHANNELS,
             callback=audio_callback,
             blocksize=int(SAMPLE_RATE * BLOCK_DURATION),
             dtype="float32"
