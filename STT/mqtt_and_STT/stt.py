@@ -3,7 +3,7 @@ import logging
 import threading
 import time
 from voice_recorder import start_recording
-from whisperv3 import transcribe_audio
+from whisperv3 import transcribe_audio, init
 from flask import Flask
 
 flaskApp = Flask(__name__)
@@ -22,13 +22,15 @@ PROJECT_PATH = "/home/avatar/output"
 WHISPER_CONTAINER_PATH = "/opt/whisper.cpp/output"
 WHISPER_CONTAINER_NAME = "whisper_stt_container"
 
+pipe = init()
+
 logger = logging.getLogger(__name__)
 
 def run_stt_with_timeout():
     record_path = start_recording()
     print("Recording saved at:", record_path)
     print("Starting transcription...")
-    transcribe_audio(record_path)
+    transcribe_audio(pipe, record_path)
     return
 
 def main():
