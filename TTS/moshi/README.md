@@ -161,8 +161,3 @@ python TTS/tests/kyutai_v2/run_offline_agent.py
 ## 8. Testing
 
 Type your text prompts in the Terminal running `run_offline_agent.py`. The agent will respond with synthesized speech using the local Moshi TTS server.
-
-
-## 9. API
-
-[API Documentation](./API_DOC.md)

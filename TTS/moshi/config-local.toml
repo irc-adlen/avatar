@@ -4,18 +4,18 @@ instance_name = "tts"
 authorized_ids = ["public_token"]
 
 [modules.tts_py]
-hf_repo = "data_moshi/model"
+hf_repo = "/data_moshi/model"
 type = "Py"
 path = "/api/tts_streaming"
 # On pointe vers le tokenizer qu'on vient de télécharger
-text_tokenizer_file = "data_moshi/model/tokenizer_spm_8k_en_fr_audio.model"
+text_tokenizer_file = "/data_moshi/model/tokenizer_spm_8k_en_fr_audio.model"
 batch_size = 8
 text_bos_token = 1
 
 [modules.tts_py.py]
 log_folder = "/tmp/moshi-server-logs"
 # On pointe vers notre dossier de voix local
-voice_folder = "data_moshi/voices"
+voice_folder = "/data_moshi/voices"
 # On définit notre voix téléchargée comme défaut
 default_voice = "default_voice.wav"
 

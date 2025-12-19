@@ -9,11 +9,15 @@ import re
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional
+import os
 
 # === CONFIGURATION ===
 # Services Locaux
-MOSHI_WS_URL = "ws://localhost:8080/api/tts_streaming"
-OLLAMA_API_URL = "http://localhost:11434/api/generate"
+MOSHI_HOST = os.getenv("MOSHI_HOST", "localhost")
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "localhost")
+
+MOSHI_WS_URL = f"ws://{MOSHI_HOST}:8080/api/tts_streaming"
+OLLAMA_API_URL = f"http://{OLLAMA_HOST}:11434/api/generate"
 
 # Paramètres par défaut
 AUTH_TOKEN = "public_token"
