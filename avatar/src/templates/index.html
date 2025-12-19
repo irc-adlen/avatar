@@ -48,8 +48,7 @@ import { TalkingHead } from "talkinghead";
    VARIABLES GLOBALES
 ============================================================ */
 let head;
-let audioSocket;
-let wordSocket;
+let socket;
 let pcmNode;
 const wordQueue = [];
 let streamStartTime = null;
@@ -98,52 +97,67 @@ function base64ToFloat32(b64) {
 }
 
 /* ============================================================
-   SOCKET AUDIO
+   SOCKET
 ============================================================ */
-function connectAudioSocket() {
-  audioSocket = new WebSocket("ws://localhost:5003/audio");
 
-  audioSocket.onopen = async () => {
-    console.log("🟢 Audio socket connecté");
+function connectSocket() {
+  socket = new WebSocket("ws://localhost:5003/stream");
+
+  socket.onopen = async () => {
+    console.log("🟢 WS connecté");
+
     if (head.audioCtx.state !== "running") {
       await head.audioCtx.resume();
     }
+
+    // horloge de référence
     streamStartTime = head.audioCtx.currentTime * 1000;
   };
 
-  audioSocket.onmessage = e => {
-    const msg = JSON.parse(e.data);
-    if (msg.type !== "audio") return;
+  socket.onmessage = e => {
+    const data = JSON.parse(e.data);
+    const type = data.type;
 
-    const pcm = base64ToFloat32(msg.data);
-    pcmNode.port.postMessage(pcm);
+    switch (type) {
+
+      /* ===================== AUDIO ===================== */
+      case "audio": {
+        const pcm = base64ToFloat32(data.data);
+        pcmNode.port.postMessage(pcm);
+        break;
+      }
+
+      /* ===================== TIMESTAMPS ===================== */
+      case "timestamp": {
+        const c = data.content || {};
+        const word = c.word || c.text;
+        if (!word) return;
+
+        wordQueue.push({
+          word,
+          start: c.start * 1000,
+          end: c.end * 1000,
+          done: false
+        });
+        break;
+      }
+
+      /* ===================== META / DEBUG ===================== */
+      case "meta":
+        console.log("META:", data.content);
+        break;
+
+      case "error":
+        console.error("❌ WS ERROR:", data.message);
+        break;
+    }
   };
 
-  audioSocket.onerror = err => console.error("🔴 Audio WS error", err);
+  socket.onerror = err => {
+    console.error("🔴 WS error", err);
+  };
 }
 
-/* ============================================================
-   SOCKET MOTS
-============================================================ */
-function connectWordSocket() {
-  wordSocket = new WebSocket("ws://localhost:5003/words");
-
-  wordSocket.onopen = () => {
-    console.log("🟢 Words socket connecté");
-  };
-
-  wordSocket.onmessage = e => {
-    const { word, start_time, stop_time } = JSON.parse(e.data);
-    wordQueue.push({
-      word,
-      start: start_time,
-      end: stop_time,
-      done: false
-    });
-  };
-
-  wordSocket.onerror = err => console.error("🔴 Words WS error", err);
-}
 
 /* ============================================================
    LIPSYNC LOOP
@@ -193,8 +207,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   loadingNode.style.display = "none";
 
   await initAudioWorklet();
-  connectAudioSocket();
-  connectWordSocket();
+  connectSocket();
   lipsyncLoop();
 });
 </script>
