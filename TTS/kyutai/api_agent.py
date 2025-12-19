@@ -133,12 +133,16 @@ async def process_conversation(prompt: str, voice: str, system_instruction: str)
                                 "type": "meta",
                                 "content": data
                             })
-                            
+                            '
                 except websockets.ConnectionClosed:
                     pass # Fin normale du flux
                 except Exception as e:
                     print(f"!!! Moshi Error: {e}")
                 finally:
+                    await stream_manager.broadcast({
+                        "type": "meta",
+                        "content": {"type": "Eos"}
+                    })
                     stop_event.set() # Arrêt forcé du producer
 
             # Exécution parallèle
