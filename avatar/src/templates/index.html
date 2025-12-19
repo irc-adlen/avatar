@@ -2,35 +2,24 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>TalkingHead – Real-time Audio + Lipsync</title>
-
+  <title>TalkingHead - Auto Wake Up</title>
   <style>
-    body, html {
-      width: 100%;
-      height: 100%;
-      max-width: 800px;
-      margin: auto;
-      background: #202020;
-      color: white;
+    body, html { width: 100%; height: 100%; margin: 0; background: #202020; color: white; font-family: sans-serif; }
+    #avatar { width: 100%; height: 100%; }
+    #overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 10;
     }
-    #avatar {
-      width: 100%;
-      height: 100%;
-    }
-    #loading {
-      position: absolute;
-      bottom: 10px;
-      left: 10px;
-      font-family: Arial;
-      font-size: 18px;
-    }
+    button { padding: 15px 30px; font-size: 20px; cursor: pointer; background: #00d2ff; border: none; font-weight: bold; }
+    #loading { position: absolute; top: 10px; left: 10px; font-family: monospace; color: lime; }
   </style>
 
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js/+esm",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+      "three": "https://cdn.jsdelivr.net/npm/three@0.154.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.154.0/examples/jsm/",
+      "marked": "https://cdn.jsdelivr.net/npm/marked/lib/marked.esm.js",
       "talkinghead": "https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@1.5/modules/talkinghead.mjs"
     }
   }
@@ -39,178 +28,168 @@
 
 <body>
   <div id="avatar"></div>
-  <div id="loading">Chargement avatar…</div>
+  <div id="loading">Chargement Avatar...</div>
+  <div id="overlay"><button id="startBtn" disabled>CHARGEMENT...</button></div>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
 <script type="module">
 import { TalkingHead } from "talkinghead";
 
-/* ============================================================
-   VARIABLES GLOBALES
-============================================================ */
 let head;
-let socket;
-let pcmNode;
-const wordQueue = [];
-let streamStartTime = null;
+let socket = null;
+let mqttClient = null;
 
-/* ============================================================
-   AUDIO WORKLET (PCM FLOAT32)
-============================================================ */
-async function initAudioWorklet() {
-  const workletCode = `
-    class PCMPlayer extends AudioWorkletProcessor {
-      constructor() {
-        super();
-        this.queue = [];
-        this.port.onmessage = e => {
-          this.queue.push(...e.data);
-        };
-      }
-      process(_, outputs) {
-        const out = outputs[0][0];
-        for (let i = 0; i < out.length; i++) {
-          out[i] = this.queue.length ? this.queue.shift() : 0;
-        }
-        return true;
-      }
-    }
-    registerProcessor("pcm-player", PCMPlayer);
-  `;
+// ==========================================
+// 1. CONFIGURATION DU STREAM
+// ==========================================
+// On stocke les options ici pour pouvoir relancer le stream facilement
+const STREAM_OPTIONS = {
+    sampleRate: 24000, 
+    lipsyncType: "words", 
+    gain: 2.0,
+    lipsyncLang: 'en'
+};
 
-  const blob = new Blob([workletCode], { type: "application/javascript" });
-  const url = URL.createObjectURL(blob);
-
-  await head.audioCtx.audioWorklet.addModule(url);
-  pcmNode = new AudioWorkletNode(head.audioCtx, "pcm-player");
-  pcmNode.connect(head.audioCtx.destination);
+// ==========================================
+// 2. OUTILS DE CONVERSION
+// ==========================================
+function float32ToInt16(float32Array) {
+  const int16Array = new Int16Array(float32Array.length);
+  for (let i = 0; i < float32Array.length; i++) {
+    const s = Math.max(-1, Math.min(1, float32Array[i]));
+    int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  return int16Array.buffer;
 }
 
-/* ============================================================
-   BASE64 → FLOAT32
-============================================================ */
 function base64ToFloat32(b64) {
   const binary = atob(b64);
-  const len = binary.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return new Float32Array(bytes.buffer);
 }
 
-/* ============================================================
-   SOCKET
-============================================================ */
+// ==========================================
+// 3. LOGIQUE SOCKET INTELLIGENTE
+// ==========================================
+
+// Cette fonction vérifie si l'avatar dort. Si oui, elle le réveille.
+function ensureAvatarIsListening() {
+    if (head && !head.isStreaming) {
+        console.log("🔔 Réveil de l'avatar (Nouvelle phrase détectée)");
+        head.streamStart(STREAM_OPTIONS, null, () => {
+                console.log("🛑 FIN DE PAROLE (Trigger détecté !)");
+                if (mqttClient.connected) {
+                    mqttClient.publish('stt/start', 'go');
+                    console.log("📤 Message MQTT 'go' envoyé !");
+                } else {
+                    console.warn("⚠️ Impossible d'envoyer : MQTT non connecté");
+                }
+            });
+    }
+}
 
 function connectSocket() {
-  socket = new WebSocket("ws://localhost:5003/stream");
+  // Reset initial
+  if (socket) socket.close();
+  if (head && head.isStreaming) head.streamStop();
 
-  socket.onopen = async () => {
-    console.log("🟢 WS connecté");
+  socket = new WebSocket("ws://localhost:8000/stream/audio");
 
-    if (head.audioCtx.state !== "running") {
-      await head.audioCtx.resume();
-    }
 
-    // horloge de référence
-    streamStartTime = head.audioCtx.currentTime * 1000;
+
+  socket.onopen = () => {
+    console.log("🟢 WS Connecté");
+    // Premier démarrage
+    head.streamStart(STREAM_OPTIONS,null, () => {
+                console.log("🛑 FIN DE PAROLE (Trigger détecté !)");
+                if (mqttClient.connected) {
+                    mqttClient.publish('stt/start', 'go');
+                    console.log("📤 Message MQTT 'go' envoyé !");
+                } else {
+                    console.warn("⚠️ Impossible d'envoyer : MQTT non connecté");
+                }
+                        
+            });
   };
 
-  socket.onmessage = e => {
-    const data = JSON.parse(e.data);
-    const type = data.type;
+  socket.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
 
-    switch (type) {
+    // --- AUDIO ---
+    if (msg.type === "audio") {
+      // 1. D'abord, on s'assure que le stream est ouvert !
+      ensureAvatarIsListening();
 
-      /* ===================== AUDIO ===================== */
-      case "audio": {
-        const pcm = base64ToFloat32(data.data);
-        pcmNode.port.postMessage(pcm);
-        break;
-      }
+      const f32 = base64ToFloat32(msg.data);
+      const pcm16 = float32ToInt16(f32);
+      head.streamAudio({ audio: pcm16 });
+    } 
+    
+    // --- MOTS ---
+    else if (msg.type === "meta") {
+      const c = msg.content || {};
+      const word = c.text || c.word;
 
-      /* ===================== TIMESTAMPS ===================== */
-      case "timestamp": {
-        const c = data.content || {};
-        const word = c.word || c.text;
-        if (!word) return;
+      if (word) {
+        // 1. Ici aussi, on vérifie (au cas où les mots arrivent avant le son)
+        ensureAvatarIsListening();
 
-        wordQueue.push({
-          word,
-          start: c.start * 1000,
-          end: c.end * 1000,
-          done: false
+        head.streamAudio({
+          audio: new ArrayBuffer(0), 
+          words: [word],
+          wtimes: [c.start_s * 1000],      
+          wdurations: [(c.stop_s - c.start_s) * 1000]
         });
-        break;
       }
-
-      /* ===================== META / DEBUG ===================== */
-      case "meta":
-        console.log("META:", data.content);
-        break;
-
-      case "error":
-        console.error("❌ WS ERROR:", data.message);
-        break;
     }
   };
 
-  socket.onerror = err => {
-    console.error("🔴 WS error", err);
-  };
+  socket.onerror = (err) => console.error("🔴 Erreur Socket:", err);
 }
 
-
-/* ============================================================
-   LIPSYNC LOOP
-============================================================ */
-function lipsyncLoop() {
-  if (!streamStartTime) {
-    requestAnimationFrame(lipsyncLoop);
-    return;
-  }
-
-  const now = head.audioCtx.currentTime * 1000 - streamStartTime;
-
-  for (const w of wordQueue) {
-    if (!w.done && now >= w.start) {
-      head.lipsync.startWord(
-        w.word,
-        w.end - w.start
-      );
-      w.done = true;
-    }
-  }
-
-  requestAnimationFrame(lipsyncLoop);
-}
-
-/* ============================================================
-   INIT
-============================================================ */
+// ==========================================
+// 4. MAIN
+// ==========================================
 document.addEventListener("DOMContentLoaded", async () => {
-  const avatarNode = document.getElementById("avatar");
-  const loadingNode = document.getElementById("loading");
+  const btn = document.getElementById("startBtn");
+  const loading = document.getElementById("loading");
 
-  head = new TalkingHead(avatarNode, {
-    ttsEndpoint: "https://eu-texttospeech.googleapis.com/v1beta1/text:synthesize",
-    ttsApikey: "AIzaSyDDRrScM3t-ko-5s-YCapCxdw5O0E52Hf0", 
-    lipsyncModules: ["en"],
-    cameraView: "upper"
+  try {
+    head = new TalkingHead(document.getElementById("avatar"), {
+              ttsEndpoint: "https://eu-texttospeech.googleapis.com/v1beta1/text:synthesize",
+        ttsApikey: "AIzaSyDDRrScM3t-ko-5s-YCapCxdw5O0E52Hf0", // <- Change this
+      cameraView: "upper"
+    });
+
+    await head.showAvatar({
+      url: "https://models.readyplayer.me/693fc00c14ff705000213c26.glb?morphTargets=ARKit,Oculus+Visemes,mouthOpen,mouthSmile,eyesClosed,eyesLookUp,eyesLookDown",
+      body: "F",
+      avatarMood: "neutral",
+      lipsyncLang: "en" 
+    });
+
+    loading.style.display = "none";
+    btn.innerText = "DÉMARRER";
+    btn.disabled = false;
+
+  } catch (err) {
+    console.error(err);
+    loading.innerText = "ERREUR";
+    loading.style.color = "red";
+  }
+
+  btn.addEventListener("click", async () => {
+    document.getElementById("overlay").style.display = "none";
+    if (head.audioCtx.state === "suspended") await head.audioCtx.resume();
+    mqttClient = mqtt.connect('ws://localhost:1883');
+
+    mqttClient.on('connect', () => {
+        console.log("📡 MQTT Prêt");
+    });
+    connectSocket();
   });
-
-  await head.showAvatar({
-    url: "https://models.readyplayer.me/693fc00c14ff705000213c26.glb?morphTargets=ARKit,Oculus+Visemes,mouthOpen,mouthSmile,eyesClosed,eyesLookUp,eyesLookDown",
-    body: "F",
-    avatarMood: "neutral",
-    lipsyncLang: "en"
-  });
-
-  loadingNode.style.display = "none";
-
-  await initAudioWorklet();
-  connectSocket();
-  lipsyncLoop();
 });
 </script>
-
 </body>
 </html>
