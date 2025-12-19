@@ -10,12 +10,10 @@ services:
       - "/dev/video0:/dev/video0"
     environment:
       - INSIGHTFACE_PROVIDER=CPUExecutionProvider
-      - DISPLAY=${DISPLAY}
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix
       - ./python:/app:rw
       - .env:/app/.env
-      - insightface_models:/root/.insightface/models
+      - ./insightface_models:/root/.insightface/models
     privileged: true
     networks:
       - db_network
@@ -40,9 +38,3 @@ services:
 networks:
   db_network:
     driver: bridge
-
-volumes:
-  pgdata:
-    name: avatar_pgdata
-  insightface_models:
-    name: avatar_insightface_models
