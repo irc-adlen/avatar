@@ -18,5 +18,5 @@ records/
 .venv
 model/
 STT/adlenetmoiuwu.wav
-venv_api/
+
 venv_moshi/
