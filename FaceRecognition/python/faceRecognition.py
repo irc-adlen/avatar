@@ -5,7 +5,15 @@ from insightface.app import FaceAnalysis
 import os
 import psycopg2
 from dotenv import load_dotenv, find_dotenv
+# from flask import Flask, render_template, request, redirect, session
+from flask import Flask
 
+flaskApp = Flask(__name__)
+
+@flaskApp.route('/start_session', methods=['GET'])
+def start_session():
+    name = start_video_capture()
+    return {"recognized_name": name}
 
 # Initialise l'application InsightFace
 # "buffalo_l" contient SCRFD pour la détection et ArcFace pour l'embedding
@@ -89,7 +97,6 @@ def select_allPeople():
 # Ensure the detections table exists
 try:
     known_faces = select_allPeople()
-    print(known_faces["Mathis"]["lastSeen"], known_faces["Clem"]["lastSeen"])
 except Exception as e:
     print("Warning: could not connect to DB at startup:", e)
 
@@ -99,18 +106,21 @@ def cosine_similarity(a, b):
     b_norm = b / np.linalg.norm(b)
     return np.dot(a_norm, b_norm)
 
-# Webcam capture
-cap = cv2.VideoCapture(0)
+def start_video_capture():
+    global known_faces
+    # Webcam capture
+    cap = cv2.VideoCapture(0)
 
-THRESHOLD = 0.3  # seil to recognize face
+    THRESHOLD = 0.3  # seil to recognize face
 
-while True:
+    # while True:
     ret, frame = cap.read()
     if not ret:
-        break
+        return
 
     faces = app.get(frame)
-
+    best_name_size = "Inconnu"
+    best_size = -1
     for face in faces:
         emb = face.embedding
 
@@ -143,19 +153,18 @@ while True:
             # Update the last seen time
             known_faces[best_name]["lastSeen"] = datetime.now()
 
-        # Dessin sur l'image
+
+        # Calcul de la personne la plus proche (plus grand visage)
         x1, y1, x2, y2 = face.bbox.astype(int)
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv2.putText(frame, f"{best_name} ({best_score:.2f})", 
-                    (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 
-                    0.8, (0, 255, 0), 2)
+        if x2-x1 > best_size:
+            best_size = x2-x1
+            best_name_size = best_name
 
-    cv2.imshow("InsightFace - ArcFace + SCRFD", frame)
+    print(best_name_size)
+    return best_name_size
 
-    if cv2.waitKey(1) & 0xFF == ord("q"):
-        break
+def main():
+    flaskApp.run(host='0.0.0.0', port=5006)
 
-cap.release()
-cv2.destroyAllWindows()
-
-
+if __name__ == "__main__":
+    main()

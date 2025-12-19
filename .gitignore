@@ -10,8 +10,8 @@ venvWhisperTimestamp
 __pycache__
 whisper.cpp
 *.m4a
-STT/*/mosquitto/data/
-STT/*/mosquitto/log/
+data
+log
 cacheHuggingFace/
 records/
 #TTS
