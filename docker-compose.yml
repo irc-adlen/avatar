@@ -49,28 +49,26 @@ services:
     environment:
       - INSIGHTFACE_PROVIDER=CPUExecutionProvider
     volumes:
-      - ./python:/app:rw
-      - .env:/app/.env
+      - ./FaceRecognition/python:/app:rw
+      - ./.env:/app/.env
       - ./insightface_models:/root/.insightface/models
     privileged: true
     networks:
       - db_network
     ports:
       - "5006:5006"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   db:
     image: postgres:15
-    env_file:
-      - ./FaceRecognition/.env
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASS}
       POSTGRES_DB: ${DB_NAME}
     volumes:
       - ./pgdata:/var/lib/postgresql/data
-      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    # ports:
-    #   - "5432:5432"
+      - ./FaceRecognition/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     restart: unless-stopped
     networks:
       - db_network
