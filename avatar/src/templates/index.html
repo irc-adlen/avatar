@@ -73,18 +73,29 @@ function base64ToFloat32(b64) {
 // 3. LOGIQUE SOCKET INTELLIGENTE
 // ==========================================
 
+function send_finish(){
+  const url = "http://localhost:5007/start_session"; // Remplacez par votre URL
+
+  fetch(url)
+      .then(response => {
+          if (response.ok) {
+              console.log("✅ Requête GET envoyée avec succès !");
+          } else {
+              console.error("⚠️ Erreur serveur :", response.status);
+          }
+      })
+      .catch(error => {
+          console.error("❌ Erreur réseau ou technique :", error);
+      });
+}
+
 // Cette fonction vérifie si l'avatar dort. Si oui, elle le réveille.
 function ensureAvatarIsListening() {
     if (head && !head.isStreaming) {
         console.log("🔔 Réveil de l'avatar (Nouvelle phrase détectée)");
         head.streamStart(STREAM_OPTIONS, null, () => {
                 console.log("🛑 FIN DE PAROLE (Trigger détecté !)");
-                if (mqttClient.connected) {
-                    mqttClient.publish('stt/start', 'go');
-                    console.log("📤 Message MQTT 'go' envoyé !");
-                } else {
-                    console.warn("⚠️ Impossible d'envoyer : MQTT non connecté");
-                }
+                send_finish();
             });
     }
 }
@@ -103,12 +114,7 @@ function connectSocket() {
     // Premier démarrage
     head.streamStart(STREAM_OPTIONS,null, () => {
                 console.log("🛑 FIN DE PAROLE (Trigger détecté !)");
-                if (mqttClient.connected) {
-                    mqttClient.publish('stt/start', 'go');
-                    console.log("📤 Message MQTT 'go' envoyé !");
-                } else {
-                    console.warn("⚠️ Impossible d'envoyer : MQTT non connecté");
-                }
+                send_finish();
                         
             });
   };
@@ -182,11 +188,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   btn.addEventListener("click", async () => {
     document.getElementById("overlay").style.display = "none";
     if (head.audioCtx.state === "suspended") await head.audioCtx.resume();
-    mqttClient = mqtt.connect('ws://localhost:1883');
-
-    mqttClient.on('connect', () => {
-        console.log("📡 MQTT Prêt");
-    });
+   
     connectSocket();
   });
 });

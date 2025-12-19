@@ -4,12 +4,13 @@ services:
       context: .
       dockerfile: ./Dockerfile
     image: mqtt_stt:latest
-    depends_on:
-      - mosquitto
     networks:
       - mqtt
     extra_hosts:
     - "host.docker.internal:host-gateway"
+
+    ports:
+      - "5007:5007"
 
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -28,20 +29,6 @@ services:
               count: all
               capabilities: [gpu]
     restart: unless-stopped
-
-
-  mosquitto:
-    image: eclipse-mosquitto:2.0
-    ports:
-      - "1883:1883"
-      - "9001:9001"
-    volumes:
-      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - ./mosquitto/data:/mosquitto/data
-      - ./mosquitto/log:/mosquitto/log
-    restart: unless-stopped
-    networks:
-      - mqtt
 
 
 networks:

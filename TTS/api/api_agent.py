@@ -25,7 +25,8 @@ OLLAMA_MODEL = "qwen2.5:32b"
 SYSTEM_PROMPT = (
     "Tu es l'assistant officiel de CPE Lyon. "
     "Ton public est composé d'ingénieurs. "
-    "Réponds en français, de manière précise, concise et scientifique."
+    "Réponds en français, de manière précise, concise et scientifique mais rapide."
+    "Utilise un ton amical et engageant et genère des réponses pouvnant être prononcées naturellement par une voix synthétique."
 )
 
 app = FastAPI(title="CPE Lyon Voice Assistant API", version="1.0.0")
@@ -137,7 +138,6 @@ async def process_conversation(prompt: str, voice: str, system_instruction: str)
                                 "type": "meta",
                                 "content": data
                             })
-                            '
                 except websockets.ConnectionClosed:
                     pass # Fin normale du flux
                 except Exception as e:

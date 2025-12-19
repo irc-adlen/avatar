@@ -4,13 +4,19 @@ import threading
 import time
 from voice_recorder import start_recording
 from whisperv3 import transcribe_audio
-from flask import Flask
+from flask import Flask, Response
 
 flaskApp = Flask(__name__)
 
 @flaskApp.route('/start_session', methods=['GET'])
 def start_session():
     name = run_stt_with_timeout()
+    return Response(
+            status=200,
+            headers={
+                "Access-Control-Allow-Origin": "*"
+            }
+        )
     # return {"recognized_name": name}
 
 logging.basicConfig(
