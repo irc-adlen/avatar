@@ -1,3 +1,4 @@
+from unittest import result
 import cv2
 import numpy as np
 from datetime import datetime, timedelta
@@ -5,15 +6,24 @@ from insightface.app import FaceAnalysis
 import os
 import psycopg2
 from dotenv import load_dotenv, find_dotenv
-# from flask import Flask, render_template, request, redirect, session
-from flask import Flask
+from flask import Flask, Response
+import requests
 
 flaskApp = Flask(__name__)
 
 @flaskApp.route('/start_session', methods=['GET'])
 def start_session():
     name = start_video_capture()
-    return {"recognized_name": name}
+    if name is not None:
+            url = 'http://host.docker.internal:8000/chat'
+            myobj = {
+                "prompt": f"Dis bonjour à {name}",
+                "voice": "default_voice.wav"
+            }
+            requests.post(url, json = myobj)
+    return Response(
+        status=200,
+    )
 
 # Initialise l'application InsightFace
 # "buffalo_l" contient SCRFD pour la détection et ArcFace pour l'embedding
@@ -119,7 +129,7 @@ def start_video_capture():
         return
 
     faces = app.get(frame)
-    best_name_size = "Inconnu"
+    best_name_size = None
     best_size = -1
     for face in faces:
         emb = face.embedding

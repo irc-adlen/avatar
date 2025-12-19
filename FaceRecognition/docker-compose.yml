@@ -19,6 +19,8 @@ services:
       - db_network
     ports:
       - "5006:5006"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   db:
     image: postgres:15
