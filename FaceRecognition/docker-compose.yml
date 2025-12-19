@@ -8,22 +8,19 @@ services:
       - db
     devices:
       - "/dev/video0:/dev/video0"
-    # Allow access to host X11 for GUI display (cv2.imshow). Note: this exposes X server to container.
     environment:
       - INSIGHTFACE_PROVIDER=CPUExecutionProvider
       - DISPLAY=${DISPLAY}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
-      # Bind-mount local source for hot-reload during development
       - ./python:/app:rw
-      # Mount host .env (one level above FaceRecognition) into container
       - .env:/app/.env
-      # Persist insightface models so they aren't re-downloaded every start
       - insightface_models:/root/.insightface/models
-    # Some systems need privileged to access webcam devices; remove if not required.
     privileged: true
-    # If you prefer using host networking (may simplify device access), uncomment:
-    # network_mode: "host"
+    networks:
+      - db_network
+    ports:
+      - "5006:5006"
 
   db:
     image: postgres:15
@@ -37,6 +34,12 @@ services:
     ports:
       - "5432:5432"
     restart: unless-stopped
+    networks:
+      - db_network
+
+networks:
+  db_network:
+    driver: bridge
 
 volumes:
   pgdata:
