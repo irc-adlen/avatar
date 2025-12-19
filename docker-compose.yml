@@ -1,11 +1,80 @@
-version: "3.9"
-
 services:
   avatar:
     image: avatar
+    build:
+      context: ./avatar
+      dockerfile: ./Dockerfile
     ports:
       - "5003:5003"
     extra_hosts:
     - "host.docker.internal:host-gateway"
 
-  
+  mqtt_stt:
+    build:
+      context: ./STT/mqtt_and_STT
+      dockerfile: ./Dockerfile
+    image: mqtt_stt:latest
+    extra_hosts:
+    - "host.docker.internal:host-gateway"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./records:/app/records
+      - ./cacheHuggingFace:/root/.cache/huggingface
+    devices:
+      - /dev/snd:/dev/snd
+    group_add:
+      - "audio"
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "5007:5007"
+    restart: unless-stopped
+
+
+  faceapp:
+    build:
+      context: ./FaceRecognition
+      dockerfile: python/Dockerfile
+    image: faceapp:latest
+    depends_on:
+      - db
+    devices:
+      - "/dev/video0:/dev/video0"
+    environment:
+      - INSIGHTFACE_PROVIDER=CPUExecutionProvider
+    volumes:
+      - ./python:/app:rw
+      - .env:/app/.env
+      - ./insightface_models:/root/.insightface/models
+    privileged: true
+    networks:
+      - db_network
+    ports:
+      - "5006:5006"
+
+  db:
+    image: postgres:15
+    env_file:
+      - ./FaceRecognition/.env
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASS}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # ports:
+    #   - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - db_network
+
+networks:
+  db_network:
+    driver: bridge

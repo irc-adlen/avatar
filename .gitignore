@@ -4,6 +4,7 @@
 faceRecognitionEnv/
 .env
 pgdata/
+insightface_models
 #Whisper
 venvWhisper
 venvWhisperTimestamp
