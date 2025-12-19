@@ -6,4 +6,4 @@ transformers
 accelerate
 sounddevice
 scipy
-paho-mqtt
+flask

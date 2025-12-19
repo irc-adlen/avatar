@@ -6,7 +6,7 @@ import os
 import psycopg2
 from dotenv import load_dotenv, find_dotenv
 # from flask import Flask, render_template, request, redirect, session
-from flask import Flask, request
+from flask import Flask
 
 flaskApp = Flask(__name__)
 
