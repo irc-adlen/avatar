@@ -6,47 +6,100 @@ import msgpack
 import uvicorn
 import aiohttp
 import re
+import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
 from pydantic import BaseModel
-from typing import Optional
-import os
+from typing import Optional, List, Dict
+import pymongo
 
-# === CONFIGURATION ===
-# Services Locaux
+# === CONFIGURATION DOCKER / LOCAL ===
+# Si on est dans Docker, ces variables seront définies dans le docker-compose
 MOSHI_HOST = os.getenv("MOSHI_HOST", "localhost")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "localhost")
+MONGO_HOST = os.getenv("MONGO_HOST", "localhost")
 
+# URLs
 MOSHI_WS_URL = f"ws://{MOSHI_HOST}:8080/api/tts_streaming"
-OLLAMA_API_URL = f"http://{OLLAMA_HOST}:11434/api/generate"
+# NOTE IMPORTANTE : On utilise /api/chat pour la mémoire
+OLLAMA_API_URL = f"http://{OLLAMA_HOST}:11434/api/chat"
 
-# Paramètres par défaut
 AUTH_TOKEN = "public_token"
 OLLAMA_MODEL = "qwen2.5:32b" 
 SYSTEM_PROMPT = (
-    "Tu es l'assistant officiel de CPE Lyon. "
-    "Ton public est composé d'ingénieurs. "
-    "Réponds en français, de manière précise, concise et scientifique."
+    "Tu es l'assistant officiel. "
+    "Réponds de manière concise, précise et naturelle."
 )
 
-app = FastAPI(title="CPE Lyon Voice Assistant API", version="1.0.0")
+app = FastAPI(title="Voice Assistant API with Memory")
 
-# --- GESTION DES FLUX (BROADCASTER) ---
+class ConversationManager:
+    def __init__(self):
+        # Connexion à MongoDB
+        print(f">>> Connexion à MongoDB sur {MONGO_HOST}...")
+        self.client = pymongo.MongoClient(f"mongodb://{MONGO_HOST}:27017/")
+        self.db = self.client["cpe_assistant_db"]
+        self.collection = self.db["conversations"]
+        self.max_history = 10
+
+    def get_history(self, session_id: str, system_instruction: str):
+        # On cherche la conversation dans la base
+        doc = self.collection.find_one({"session_id": session_id})
+        
+        if not doc:
+            # Si elle n'existe pas, on la crée avec le System Prompt
+            initial_history = [{"role": "system", "content": system_instruction}]
+            self.collection.insert_one({
+                "session_id": session_id,
+                "messages": initial_history
+            })
+            return initial_history
+        
+        return doc["messages"]
+
+    def add_message(self, session_id: str, role: str, content: str):
+        # 1. On récupère l'historique actuel
+        doc = self.collection.find_one({"session_id": session_id})
+        if not doc: return # Sécurité
+        
+        messages = doc["messages"]
+        
+        # 2. On ajoute le nouveau message
+        messages.append({"role": role, "content": content})
+        
+        # 3. Gestion de la fenêtre glissante (On garde System + les 10 derniers)
+        if len(messages) > self.max_history + 1:
+            system_msg = messages[0]
+            recent_msgs = messages[-(self.max_history):]
+            messages = [system_msg] + recent_msgs
+        
+        # 4. Mise à jour dans MongoDB
+        self.collection.update_one(
+            {"session_id": session_id},
+            {"$set": {"messages": messages}}
+        )
+
+# Instance globale
+try:
+    memory = ConversationManager()
+except Exception as e:
+    print(f"!!! Erreur connexion Mongo: {e}")
+
+
+# --- GESTIONNAIRE FLUX AUDIO ---
 class AudioStreamManager:
-    """Gère la connexion WebSocket unique vers le service de diffusion (Avatar/Frontend)."""
     def __init__(self):
         self.active_connection: WebSocket | None = None
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connection = websocket
-        print(">>> [System] Audio Stream Client Connected")
+        print(">>> [System] Audio Client Connected")
 
     def disconnect(self):
         self.active_connection = None
-        print(">>> [System] Audio Stream Client Disconnected")
+        print(">>> [System] Audio Client Disconnected")
 
     async def broadcast(self, data: dict):
-        """Envoie les données au client connecté."""
         if self.active_connection:
             try:
                 await self.active_connection.send_json(data)
@@ -59,29 +112,40 @@ class ChatRequest(BaseModel):
     prompt: str
     voice: Optional[str] = "default_voice.wav"
     system: Optional[str] = SYSTEM_PROMPT
+    session_id: Optional[str] = "default" # Identifiant pour la mémoire
 
-# --- COEUR DU SYSTÈME ---
-async def process_conversation(prompt: str, voice: str, system_instruction: str):
+# --- LOGIQUE PRINCIPALE ---
+async def process_conversation(prompt: str, voice: str, system_instruction: str, session_id: str):
     from urllib.parse import urlencode
     
-    # Configuration de la connexion Moshi
+    # Configuration Moshi
     params = {"voice": voice, "format": "PcmMessagePack", "auth_id": AUTH_TOKEN}
     uri = f"{MOSHI_WS_URL}?{urlencode(params)}"
-
-    print(f">>> Attempting connection to Moshi at {uri}")
     
     try:
+        # On se connecte à Moshi
         async with websockets.connect(uri, additional_headers={"kyutai-api-key": AUTH_TOKEN}) as moshi_ws:
-            print(f">>> [Job] Processing prompt: '{prompt[:30]}...'")
+            print(f">>> [Job] Prompt: '{prompt[:30]}...' | Session: {session_id}")
             stop_event = asyncio.Event()
 
-            # --- Tâche A : Ollama (Génération Texte) ---
+            # --- TÂCHE A : Ollama (Producteur avec Mémoire) ---
             async def task_ollama_producer():
                 async with aiohttp.ClientSession() as session:
+                    
+                    # 1. Récupération de l'historique
+                    messages = memory.get_history(session_id, system_instruction)
+                    # 2. Ajout du message utilisateur
+                    memory.add_message(session_id, "user", prompt)
+                    
+                    # 3. Payload pour /api/chat
                     payload = {
-                        "model": OLLAMA_MODEL, "prompt": prompt, 
-                        "system": system_instruction, "stream": True
+                        "model": OLLAMA_MODEL,
+                        "messages": messages, # On envoie tout l'historique
+                        "stream": True
                     }
+
+                    full_response = "" # Pour sauvegarder la réponse complète à la fin
+
                     try:
                         async with session.post(OLLAMA_API_URL, json=payload) as resp:
                             buffer = ""
@@ -92,17 +156,24 @@ async def process_conversation(prompt: str, voice: str, system_instruction: str)
                                         data = json.loads(chunk)
                                         if data.get("done"): break
                                         
-                                        token = data.get("response", "")
+                                        # IMPORTANT : Parsing adapté pour /api/chat
+                                        # La structure est data['message']['content']
+                                        token = data.get("message", {}).get("content", "")
+                                        
+                                        full_response += token
                                         buffer += token
                                         
-                                        # Envoi à Moshi par phrases/groupes de mots
+                                        # Envoi à Moshi par phrases
                                         if re.search(r'[\.\,\!\?\;\:]', token):
                                             if buffer.strip():
                                                 await moshi_ws.send(msgpack.packb({"type": "Text", "text": buffer}))
                                             buffer = ""
                                     except: pass
                             
-                            # Envoi du reste du buffer et signal de fin
+                            # Fin de génération : On sauvegarde la réponse de l'assistant
+                            memory.add_message(session_id, "assistant", full_response)
+
+                            # Envoi du reste du buffer
                             if buffer.strip() and not stop_event.is_set():
                                 await moshi_ws.send(msgpack.packb({"type": "Text", "text": buffer}))
                             
@@ -113,7 +184,7 @@ async def process_conversation(prompt: str, voice: str, system_instruction: str)
                         print(f"!!! Ollama Error: {e}")
                         await stream_manager.broadcast({"type": "error", "message": str(e)})
 
-            # --- Tâche B : Moshi (Synthèse Audio) ---
+            # --- TÂCHE B : Moshi (Consommateur) ---
             async def task_moshi_consumer():
                 try:
                     async for message in moshi_ws:
@@ -121,7 +192,6 @@ async def process_conversation(prompt: str, voice: str, system_instruction: str)
                         msg_type = data.get("type")
                         
                         if msg_type == "Audio":
-                            # Encodage PCM Audio
                             import struct
                             pcm_bytes = struct.pack(f'{len(data["pcm"])}f', *data["pcm"])
                             b64 = base64.b64encode(pcm_bytes).decode("utf-8")
@@ -131,53 +201,42 @@ async def process_conversation(prompt: str, voice: str, system_instruction: str)
                                 "data": b64,
                                 "sample_rate": 24000
                             })
-                            
                         else:
-                            # Envoi des métadonnées (Timestamps, Alignement)
-                            # C'est ici que 'Alignment' ou 'TextToken' passent
-                            await stream_manager.broadcast({
-                                "type": "meta",
-                                "content": data
-                            })
+                            await stream_manager.broadcast({"type": "meta", "content": data})
+                            
                 except websockets.ConnectionClosed:
-                    pass # Fin normale du flux
+                    pass
                 except Exception as e:
                     print(f"!!! Moshi Error: {e}")
                 finally:
-                    await stream_manager.broadcast({
-                        "type": "meta",
-                        "content": {"type": "Eos"}
-                    })
-                    stop_event.set() # Arrêt forcé du producer
+                    stop_event.set()
 
-            # Exécution parallèle
-            t_producer = asyncio.create_task(task_ollama_producer())
-            t_consumer = asyncio.create_task(task_moshi_consumer())
-            
-            await t_consumer
-            if not t_producer.done(): t_producer.cancel()
+            # Lancement parallèle
+            t1 = asyncio.create_task(task_ollama_producer())
+            t2 = asyncio.create_task(task_moshi_consumer())
+            await t2
+            if not t1.done(): t1.cancel()
 
     except Exception as e:
         print(f"!!! Global Error: {e}")
 
 # --- ENDPOINTS ---
-
 @app.websocket("/stream/audio")
 async def audio_stream_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for Audio/Metadata output."""
     await stream_manager.connect(websocket)
     try:
-        while True: await websocket.receive_text() # Keep-alive loop
-    except WebSocketDisconnect:
-        stream_manager.disconnect()
+        while True: await websocket.receive_text()
+    except WebSocketDisconnect: stream_manager.disconnect()
 
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest, background_tasks: BackgroundTasks):
-    """HTTP POST endpoint to trigger generation."""
-    if not stream_manager.active_connection:
-        print(">>> [Warning] No audio client connected. Audio will be lost.")
-    
-    background_tasks.add_task(process_conversation, request.prompt, request.voice, request.system)
+    background_tasks.add_task(
+        process_conversation, 
+        request.prompt, 
+        request.voice, 
+        request.system, 
+        request.session_id # On passe l'ID de session
+    )
     return {"status": "processing_started"}
 
 if __name__ == "__main__":
