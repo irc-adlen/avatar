@@ -1,14 +1,13 @@
 services:
-  mqtt_stt:
+  stt:
     build:
       context: .
       dockerfile: ./Dockerfile
-    image: mqtt_stt:latest
-    networks:
-      - mqtt
+    image: stt:latest
     extra_hosts:
     - "host.docker.internal:host-gateway"
-
+    ports:
+      - "5007:5007"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./records:/app/records
