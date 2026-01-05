@@ -13,4 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # On copie le script de l'agent
 COPY api_agent.py .
 
+# Port
+EXPOSE 8080
+
 CMD ["python", "api_agent.py"]

@@ -67,6 +67,8 @@ async def process_conversation(prompt: str, voice: str, system_instruction: str)
     # Configuration de la connexion Moshi
     params = {"voice": voice, "format": "PcmMessagePack", "auth_id": AUTH_TOKEN}
     uri = f"{MOSHI_WS_URL}?{urlencode(params)}"
+
+    print(f">>> Attempting connection to Moshi at {uri}")
     
     try:
         async with websockets.connect(uri, additional_headers={"kyutai-api-key": AUTH_TOKEN}) as moshi_ws:
@@ -137,7 +139,6 @@ async def process_conversation(prompt: str, voice: str, system_instruction: str)
                                 "type": "meta",
                                 "content": data
                             })
-                            '
                 except websockets.ConnectionClosed:
                     pass # Fin normale du flux
                 except Exception as e:

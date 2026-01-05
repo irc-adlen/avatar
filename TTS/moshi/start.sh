@@ -21,4 +21,4 @@ fi
 
 # 3. Lancement du serveur
 echo ">>> Lancement de moshi-server..."
-exec moshi-server worker --config /app/config.toml --host 0.0.0.0 --port 8080
+exec moshi-server worker --config /app/config.toml

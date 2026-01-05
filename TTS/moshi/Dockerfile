@@ -32,17 +32,17 @@ ENV CUDA_COMPUTE_CAP=86
 # C'est l'étape longue, mais elle ne se fera qu'une fois au build
 RUN cargo install --features cuda moshi-server
 
+# On indique au système où trouver la librairie Python de Conda
+ENV LD_LIBRARY_PATH="/opt/conda/lib:$LD_LIBRARY_PATH"
+
 # 5. Préparation des dossiers
 WORKDIR /app
 RUN mkdir -p /app/data_moshi/model /app/data_moshi/voices
 
 # 6. Scripts et Config
-COPY config-local.toml /app/config.toml
+COPY config-docker.toml /app/config.toml
 COPY start.sh /app/start.sh
 COPY data_moshi/voices /app/data_moshi/voices
 RUN chmod +x /app/start.sh
-
-# Port
-EXPOSE 8080
 
 ENTRYPOINT ["/app/start.sh"]
