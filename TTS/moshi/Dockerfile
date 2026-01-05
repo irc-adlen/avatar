@@ -1,20 +1,44 @@
-# Utilisation d'une image avec support CUDA pour la performance
-FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
+# On part d'une image PyTorch avec CUDA pour avoir les drivers GPU
+FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel
 
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 1. Installation des dépendances système (Audio + Rust reqs)
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    libasound2-dev \
+    libportaudio2 \
+    curl \
+    git \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Installation de Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# 3. Installation des dépendances Python
+# On installe moshi et huggingface_hub
+RUN pip install --upgrade pip && \
+    pip install "moshi==0.2.11" sphn sounddevice huggingface_hub msgpack websockets pydantic
+
+# 4. Compilation de moshi-server avec support CUDA
+# C'est l'étape longue, mais elle ne se fera qu'une fois au build
+RUN cargo install --features cuda moshi-server
+
+# 5. Préparation des dossiers
 WORKDIR /app
+RUN mkdir -p /app/data_moshi/model /app/data_moshi/voices
 
-# Installation de Moshi (et utilitaires)
-RUN pip install --no-cache-dir moshi huggingface_hub
-
-# Copie de la configuration et des voix (Intégration directe à l'image)
+# 6. Scripts et Config
 COPY config-local.toml /app/config.toml
-COPY data_moshi/voices /data_moshi/voices
-
-# Script de démarrage
 COPY start.sh /app/start.sh
+COPY data_moshi/voices /app/data_moshi/voices
 RUN chmod +x /app/start.sh
 
-# Port interne (ne sera pas exposé au public, juste au réseau Docker)
+# Port
 EXPOSE 8080
 
 ENTRYPOINT ["/app/start.sh"]
