@@ -24,6 +24,10 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 RUN pip install --upgrade pip && \
     pip install "moshi==0.2.11" sphn sounddevice huggingface_hub msgpack websockets pydantic
 
+# On définit l'architecture GPU manuellement (86 = RTX 3090 / Ampere)
+# Cela empêche le script de chercher nvidia-smi pendant le build
+ENV CUDA_COMPUTE_CAP=86
+
 # 4. Compilation de moshi-server avec support CUDA
 # C'est l'étape longue, mais elle ne se fera qu'une fois au build
 RUN cargo install --features cuda moshi-server
