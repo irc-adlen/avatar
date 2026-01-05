@@ -14,13 +14,19 @@ flaskApp = Flask(__name__)
 @flaskApp.route('/start_session', methods=['GET'])
 def start_session():
     name = start_video_capture()
+    url = 'http://host.docker.internal:8000/chat'
     if name is not None:
-            url = 'http://host.docker.internal:8000/chat'
-            myobj = {
-                "prompt": f"Dis bonjour à {name}",
-                "voice": "default_voice.wav"
-            }
-            requests.post(url, json = myobj)
+        myobj = {
+            "prompt": f"Dis bonjour à {name}",
+            "voice": "default_voice.wav"
+        }
+    myobj = {
+        "prompt": f"Demande à la personne son nom",
+        "voice": "default_voice.wav"
+    }
+
+    requests.post(url, json = myobj)
+    
     return Response(
         status=200,
     )
