@@ -8,11 +8,15 @@ WORKDIR /app
 RUN apt-get update && \
     apt-get install -y \
         python3 \
+        python3.12-venv \
         python3-pip \
         ffmpeg \
         portaudio19-dev \
         alsa-utils \
     && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH" 
 
 # Python deps
 COPY requirements.txt .
