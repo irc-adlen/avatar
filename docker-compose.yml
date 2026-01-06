@@ -9,13 +9,34 @@ services:
     extra_hosts:
     - "host.docker.internal:host-gateway"
 
-  mqtt_stt:
+  faceapp:
     build:
-      context: ./STT/mqtt_and_STT
+      context: ./FaceRecognition
+      dockerfile: python/Dockerfile
+    image: faceapp:latest
+    devices:
+      - "/dev/video0:/dev/video0"
+    environment:
+      - INSIGHTFACE_PROVIDER=CPUExecutionProvider
+    volumes:
+      - ./python:/app:rw
+      - .env:/app/.env
+      - ./insightface_models:/root/.insightface/models
+    privileged: true
+    ports:
+      - "5006:5006"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  stt:
+    build:
+      context: ./STT
       dockerfile: ./Dockerfile
-    image: mqtt_stt:latest
+    image: stt:latest
     extra_hosts:
     - "host.docker.internal:host-gateway"
+    ports:
+      - "5007:5007"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./records:/app/records
@@ -24,55 +45,5 @@ services:
       - /dev/snd:/dev/snd
     group_add:
       - "audio"
-    runtime: nvidia
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-    ports:
-      - "5007:5007"
+    gpus: all
     restart: unless-stopped
-
-
-  faceapp:
-    build:
-      context: ./FaceRecognition
-      dockerfile: python/Dockerfile
-    image: faceapp:latest
-    depends_on:
-      - db
-    devices:
-      - "/dev/video0:/dev/video0"
-    environment:
-      - INSIGHTFACE_PROVIDER=CPUExecutionProvider
-    volumes:
-      - ./FaceRecognition/python:/app:rw
-      - ./.env:/app/.env
-      - ./insightface_models:/root/.insightface/models
-    privileged: true
-    networks:
-      - db_network
-    ports:
-      - "5006:5006"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASS}
-      POSTGRES_DB: ${DB_NAME}
-    volumes:
-      - ./pgdata:/var/lib/postgresql/data
-      - ./FaceRecognition/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    restart: unless-stopped
-    networks:
-      - db_network
-
-networks:
-  db_network:
-    driver: bridge
