@@ -47,3 +47,81 @@ services:
       - "audio"
     gpus: all
     restart: unless-stopped
+  mongo:
+    image: mongo:latest
+    container_name: moshi_mongo
+    restart: always
+    volumes:
+      - mongo_data:/data/db # Persistance des données sur le disque
+    networks:
+      - moshi_net
+
+  # --- Service 1 : LLM (Ollama) ---
+  ollama:
+    image: ollama/ollama:latest
+    container_name: moshi_ollama
+    gpus: all
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - moshi_net
+    # Commande pour pré-charger le modèle au démarrage (optionnel mais pratique)
+    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull qwen2.5:32b && wait"]
+
+  # --- Service 2 : TTS (Moshi) ---
+  moshi:
+    build: ./TTS/moshi
+    container_name: moshi_server
+    volumes:
+      - moshi_data:/app/data_moshi  # Persistance des modèles
+    gpus: all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - moshi_net
+
+  # --- Service 3 : Agent (Client Python) ---
+  agent:
+    build: ./TTS/api
+    container_name: moshi_agent
+    depends_on:
+      - moshi
+      - ollama
+    environment:
+      - DISPLAY=${DISPLAY}
+      - PULSE_SERVER=unix:${XDG_RUNTIME_DIR}/pulse/native
+      - MOSHI_HOST=moshi
+      - OLLAMA_HOST=ollama
+      - MONGO_HOST=mongo
+    volumes:
+      # Montage pour l'audio (PulseAudio)
+      - ${XDG_RUNTIME_DIR}/pulse/native:${XDG_RUNTIME_DIR}/pulse/native
+      - ~/.config/pulse/cookie:/root/.config/pulse/cookie
+    devices:
+      - /dev/snd:/dev/snd  # Accès direct à la carte son (alternative à Pulse)
+    networks:
+      - moshi_net
+    stdin_open: true # Pour pouvoir taper dans le terminal
+    tty: true
+    ports:
+      - "8000:8000"
+
+volumes:
+  ollama_data:
+  moshi_data:
+  mongo_data:
+
+networks:
+  moshi_net:
