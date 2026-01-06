@@ -21,3 +21,8 @@ model/
 STT/adlenetmoiuwu.wav
 
 venv_moshi/
+venv_LLM/
+unsloth_compiled_cache/
+outputs/
+model_cpe_lyon/
+llama.cpp/
