@@ -29,7 +29,7 @@ def init():
     return pipe
 
 
-def transcribe_audio(pipe, path_to_audio_file):
+def transcribe_audio(pipe, path_to_audio_file, is_next_unknown_person):
     print("searching for results")
     result = pipe(path_to_audio_file)
     print("transcription complete")
@@ -40,4 +40,10 @@ def transcribe_audio(pipe, path_to_audio_file):
            "voice": "default_voice.wav"
          }
 
-    x = requests.post(url, json = myobj)
+    requests.post(url, json = myobj)
+    # if is_next_unknown_person:
+    #     url = 'http://host.docker.internal:8000/get_person_details'
+    #     myobj = {
+    #         "prompt": result["text"],
+    #         }
+    #     requests.post(url, json = myobj)
