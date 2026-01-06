@@ -7,27 +7,19 @@ from flask import Flask, Response
 import requests
 from pymongo import MongoClient
 from dotenv import load_dotenv, find_dotenv
+import secrets
 
 flaskApp = Flask(__name__)
+# ---------------- MongoDB ----------------
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
+MONGO_DB = os.environ.get("MONGO_DB", "cpe_assistant_db")
+MONGO_COLLECTION = os.environ.get("MONGO_COLLECTION", "people")
 
-@flaskApp.route('/check_camera', methods=['GET'])
-def start_session():
-    name = start_video_capture()
-    url = 'http://host.docker.internal:8000/chat'
+mongo_client = MongoClient(MONGO_URI)
+mongo_db = mongo_client[MONGO_DB]
+people_collection = mongo_db[MONGO_COLLECTION]
+conversations_collection = mongo_db["conversations"]
 
-    if name is not None:
-        myobj = {
-            "prompt": f"Dis bonjour à {name}",
-            "voice": "default_voice.wav"
-        }
-    else:
-        myobj = {
-            "prompt": "Demande à la personne son nom",
-            "voice": "default_voice.wav"
-        }
-
-    requests.post(url, json=myobj)
-    return Response(status=200)
 
 # ---------------- InsightFace ----------------
 app = FaceAnalysis(name="buffalo_l", providers=["ROCMExecutionProvider"])
@@ -38,15 +30,6 @@ env_path = find_dotenv()
 if not env_path:
     env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(env_path)
-
-# ---------------- MongoDB ----------------
-MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
-MONGO_DB = os.environ.get("MONGO_DB", "cpe_assistant_db")
-MONGO_COLLECTION = os.environ.get("MONGO_COLLECTION", "people")
-
-mongo_client = MongoClient(MONGO_URI)
-mongo_db = mongo_client[MONGO_DB]
-people_collection = mongo_db[MONGO_COLLECTION]
 
 # ---------------- Utils ----------------
 def get_embedding_from_image(img_path):
@@ -90,6 +73,25 @@ def select_allPeople():
     except Exception as e:
         print("MongoDB select error:", e)
         return {}
+
+def generate_unique_hash(conversations_collection, length=16):
+    """
+    Generate a unique random hash not already present in MongoDB.
+
+    :param collection: pymongo collection
+    :param field_name: field to check uniqueness
+    :param length: length of the generated hash (in bytes)
+    :return: unique hash string
+    """
+    while True:
+        # Generate cryptographically strong random hash
+        random_hash = secrets.token_hex(length)
+
+        # Check if hash already exists in MongoDB
+        exists = conversations_collection.find_one({"session_id": random_hash})
+
+        if not exists:
+            return random_hash
 
 # Load known faces at startup
 try:
@@ -146,6 +148,28 @@ def start_video_capture():
             best_name_size = best_name
 
     return best_name_size
+
+@flaskApp.route('/check_camera', methods=['GET'])
+def start_session():
+    global conversations_collection
+    name = start_video_capture()
+    url = 'http://host.docker.internal:8000/chat'
+    hash = generate_unique_hash(conversations_collection)
+    if name is not None:
+        myobj = {
+            "prompt": f"Dis bonjour à {name}",
+            "voice": "default_voice.wav",
+            "session_id": hash
+        }
+    else:
+        myobj = {
+            "prompt": "Demande le prenom de la personne",
+            "voice": "default_voice.wav",
+            "session_id": hash
+        }
+
+    requests.post(url, json=myobj)
+    return Response(status=200)
 
 def main():
     flaskApp.run(host='0.0.0.0', port=5006)
