@@ -41,9 +41,9 @@ def transcribe_audio(pipe, path_to_audio_file, is_next_unknown_person):
          }
 
     requests.post(url, json = myobj)
-    # if is_next_unknown_person:
-    #     url = 'http://host.docker.internal:8000/get_person_details'
-    #     myobj = {
-    #         "prompt": result["text"],
-    #         }
-    #     requests.post(url, json = myobj)
+    if is_next_unknown_person:
+        url = 'http://host.docker.internal:8000/chat'
+        myobj = {
+            "prompt": f"[system] extrait les données : '{result['text']}'",
+            }
+        requests.post(url, json = myobj)
