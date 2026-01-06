@@ -10,7 +10,7 @@ from dotenv import load_dotenv, find_dotenv
 
 flaskApp = Flask(__name__)
 
-@flaskApp.route('/start_session', methods=['GET'])
+@flaskApp.route('/check_camera', methods=['GET'])
 def start_session():
     name = start_video_capture()
     url = 'http://host.docker.internal:8000/chat'
