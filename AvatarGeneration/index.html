@@ -152,6 +152,12 @@
             library.push({
                 name: selectedObject.name,
                 tag: document.getElementById('tagInput').value.toUpperCase() || "SANS_TAG",
+                parentName: selectedObject.parent ? selectedObject.parent.name : null,
+                transform: {
+                    position: selectedObject.position.toArray(),
+                    quaternion: selectedObject.quaternion.toArray(),
+                    scale: selectedObject.scale.toArray()
+                },
                 geometry: selectedObject.geometry.clone(),
                 material: selectedObject.material.clone()
             });
@@ -172,18 +178,43 @@
 
         function applyToModel(item) {
             if (!currentModel) return;
+            let found = false;
             currentModel.traverse(child => {
                 if (child.isMesh && child.name === item.name) {
-                    child.geometry = item.geometry;
-                    child.material = item.material;
+                    child.geometry = item.geometry.clone();
+                    child.material = item.material.clone();
                     if (child.material.map) {
                         child.material.map.flipY = false;
                         child.material.map.colorSpace = THREE.SRGBColorSpace;
                         child.material.map.needsUpdate = true;
                     }
                     child.material.needsUpdate = true;
+                    found = true;
                 }
             });
+
+            if (found) return;
+
+            // Ajoute le mesh si absent (ex: lunettes ou barbe inexistantes sur le modèle de base)
+            const newMesh = new THREE.Mesh(item.geometry.clone(), item.material.clone());
+            newMesh.name = item.name;
+            if (item.transform) {
+                newMesh.position.fromArray(item.transform.position);
+                newMesh.quaternion.fromArray(item.transform.quaternion);
+                newMesh.scale.fromArray(item.transform.scale);
+                newMesh.updateMatrix();
+            }
+            if (newMesh.material.map) {
+                newMesh.material.map.flipY = false;
+                newMesh.material.map.colorSpace = THREE.SRGBColorSpace;
+                newMesh.material.map.needsUpdate = true;
+            }
+
+            let parent = item.parentName ? currentModel.getObjectByName(item.parentName) : null;
+            if (!parent) parent = currentModel;
+            parent.add(newMesh);
+            refreshList();
+            highlight(newMesh);
         }
 
         // --- IMPORT / EXPORT ---
@@ -197,7 +228,7 @@
                     canvas.getContext('2d').drawImage(img, 0, 0);
                     matJSON.images = [{ uuid: "img_data", url: canvas.toDataURL('image/png') }];
                 }
-                return { name: item.name, tag: item.tag, geo: item.geometry.toJSON(), mat: matJSON };
+                return { name: item.name, tag: item.tag, parentName: item.parentName || null, transform: item.transform || null, geo: item.geometry.toJSON(), mat: matJSON };
             });
             const blob = new Blob([JSON.stringify({ items })], { type: "application/json" });
             const link = document.createElement('a');
@@ -222,7 +253,14 @@
                         texture.colorSpace = THREE.SRGBColorSpace;
                         material.map = texture;
                     }
-                    return { name: d.name, tag: d.tag, geometry: geoLoader.parse(d.geo), material };
+                    return {
+                        name: d.name,
+                        tag: d.tag,
+                        parentName: d.parentName || null,
+                        transform: d.transform || null,
+                        geometry: geoLoader.parse(d.geo),
+                        material
+                    };
                 });
                 updateLibraryUI();
             };
