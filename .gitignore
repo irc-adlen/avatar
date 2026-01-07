@@ -19,5 +19,6 @@ records/
 .venv
 model/
 STT/adlenetmoiuwu.wav
-
+venv
 venv_moshi/
+.DS_Store
