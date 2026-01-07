@@ -3,7 +3,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from insightface.app import FaceAnalysis
 import os
-from flask import Flask, Response
+from flask import Flask, Response, request, jsonify
 import requests
 from pymongo import MongoClient
 from dotenv import load_dotenv, find_dotenv
@@ -150,7 +150,7 @@ def start_video_capture():
     return best_name_size
 
 @flaskApp.route('/check_camera', methods=['GET'])
-def start_session():
+def check_camera():
     global conversations_collection
     name = start_video_capture()
     url = 'http://host.docker.internal:8000/chat'
@@ -170,6 +170,29 @@ def start_session():
 
     requests.post(url, json=myobj)
     return Response(status=200)
+
+@flaskApp.route('/save_image', methods=['POST'])
+def save_image():
+    if not request.is_json:
+        return jsonify({"error": "Expected JSON body"}), 400
+
+    # Parse JSON body
+    data = request.get_json()
+
+    cap = cv2.VideoCapture(0)
+
+    # Read one frame from the camera
+    ret, frame = cap.read()
+    if not ret:
+        print("Failed to capture image")
+        cap.release()
+        exit(1)
+
+    # Save the captured frame as an image file
+    output_path = "captured_image.jpg"
+    cv2.imwrite(output_path, frame)
+    return Response(status=200)
+
 
 def main():
     flaskApp.run(host='0.0.0.0', port=5006)

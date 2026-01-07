@@ -25,9 +25,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application and faces directory into the image
 COPY python/faceRecognition.py ./faceRecognition.py
+COPY python/readWebSocket.py ./readWebSocket.py
 COPY python/faces ./faces
+COPY ./start.sh ./start.sh
+
+RUN chmod +x start.sh
 
 # Ensure Qt uses xcb platform plugin by default inside container
 ENV QT_QPA_PLATFORM=xcb
 
-CMD ["python", "faceRecognition.py"]
+CMD ["./start.sh"]

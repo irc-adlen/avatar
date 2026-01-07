@@ -5,3 +5,4 @@ onnxruntime
 psycopg2-binary
 python-dotenv
 flask
+websockets
