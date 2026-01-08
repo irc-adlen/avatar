@@ -13,6 +13,11 @@
         #sidebar { width: 300px; border-left: 1px solid #333; display: flex; flex-direction: column; background: #252525; }
         .header { padding: 15px; background: #333; border-bottom: 1px solid #444; }
         #list, #lib-list { overflow-y: auto; flex-grow: 1; padding: 10px; }
+        .lib-item { padding: 12px; margin-bottom: 8px; border-radius: 6px; font-size: 12px; background: #3d3d3d; border: 1px solid #555; transition: 0.2s; }
+        .lib-item:hover { background: #4d4d4d; border-color: #007bff; }
+        .mesh-item:hover { background: #4d4d4d; border-color: #007bff; }
+        .lib-buttons { display: flex; gap: 6px; margin-top: 8px; }
+        .lib-buttons button { padding: 6px 10px; font-size: 10px; flex: 1; }
         .mesh-item, .lib-item { padding: 12px; margin-bottom: 8px; border-radius: 6px; font-size: 12px; cursor: pointer; background: #3d3d3d; border: 1px solid #555; transition: 0.2s; }
         .mesh-item:hover, .lib-item:hover { background: #4d4d4d; border-color: #007bff; }
         .selected { border-color: #007bff; background: #2c3e50; }
@@ -24,17 +29,59 @@
         button:disabled { background: #555 !important; opacity: 0.5; }
         .preview-img { width: 80px; height: 80px; border: 2px dashed #555; border-radius: 4px; object-fit: cover; }
         pre#apiFeatures { font-size: 10px; color: #00bcff; background: #111; padding: 8px; border-radius: 4px; height: 80px; overflow: auto; margin: 0; flex-grow: 1; white-space: pre-wrap; border: 1px solid #444; }
+        #color-panel { width: 220px; border-left: 1px solid #333; background: #252525; display: flex; flex-direction: column; }
+        #color-list { overflow-y: auto; flex-grow: 1; padding: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
+        .color-item { width: 60px; height: 60px; border-radius: 8px; cursor: pointer; border: 3px solid #555; transition: 0.2s; position: relative; overflow: hidden; }
+        .color-item:hover { border-color: #007bff; transform: scale(1.05); }
+        .color-item.selected { border-color: #00ff00; box-shadow: 0 0 10px #00ff00; }
+        .color-label { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); color: white; font-size: 8px; text-align: center; padding: 2px; }
+        .tabs { display: flex; background: #2a2a2a; border-bottom: 1px solid #444; }
+        .tab-btn { flex: 1; padding: 10px; background: #333; border: none; color: #aaa; cursor: pointer; border-right: 1px solid #444; font-size: 11px; transition: 0.2s; }
+        .tab-btn:last-child { border-right: none; }
+        .tab-btn:hover { background: #3a3a3a; }
+        .tab-btn.active { background: #27ae60; color: white; font-weight: bold; }
+        .tab-content { display: none; flex-grow: 1; overflow-y: auto; padding: 10px; }
+        .tab-content.active { display: block; }
+        .color-grid { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; height: 100%; }
     </style>
 </head>
 <body>
 
     <div id="library">
         <div class="header">
-            <h4>Bibliothèque</h4>
-            <button class="secondary" id="importLib" style="width:100%">Importer Bibliothèque JSON</button>
+            <h4>Bibliothèque Mesh</h4>
         </div>
-        <div id="lib-list"></div>
-        <div class="controls"><button class="secondary" id="exportLib">Exporter (.json)</button></div>
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="hair-mesh">Cheveux</button>
+            <button class="tab-btn" data-tab="beard-mesh">Barbe</button>
+        </div>
+        <div id="hair-mesh" class="tab-content active"></div>
+        <div id="beard-mesh" class="tab-content"></div>
+        <div class="controls">
+            <button class="secondary" id="importHairLib">Importer Cheveux</button>
+            <button class="secondary" id="importBeardLib">Importer Barbe</button>
+            <button class="secondary" id="exportLib">Exporter (.json)</button>
+        </div>
+    </div>
+
+     <div id="color-panel">
+        <div class="header">
+            <h4>Textures/Couleurs</h4>
+        </div>
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="hair-colors">Cheveux</button>
+            <button class="tab-btn" data-tab="beard-colors">Barbe</button>
+        </div>
+        <div id="hair-colors" class="tab-content active">
+            <div class="color-grid"></div>
+        </div>
+        <div id="beard-colors" class="tab-content">
+            <div class="color-grid"></div>
+        </div>
+        <div class="controls">
+            <button class="secondary" id="loadHairColors" style="font-size:11px;">Charger Cheveux</button>
+            <button class="secondary" id="loadBeardColors" style="font-size:11px;">Charger Barbe</button>
+        </div>
     </div>
 
     <div id="main-container">
@@ -61,7 +108,13 @@
             <button id="extractBtn" disabled>Extraire Mesh</button>
         </div>
     </div>
-    <input type="file" id="jsonInput" style="display:none" accept=".json">
+
+   
+
+    <input type="file" id="hairMeshInput" style="display:none" accept=".json">
+    <input type="file" id="beardMeshInput" style="display:none" accept=".json">
+    <input type="file" id="hairColorInput" style="display:none" accept=".json">
+    <input type="file" id="beardColorInput" style="display:none" accept=".json">
 
     <script type="importmap">
         {
@@ -78,8 +131,27 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
         let scene, camera, renderer, controls, currentModel, selectedObject;
-        let library = [];
+        let hairLibrary = [];
+        let beardLibrary = [];
         let mapping = [];
+        let hairColors = [];
+        let beardColors = [];
+
+        // Gestion des onglets
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const parent = btn.closest('#library, #color-panel');
+                const tabName = btn.dataset.tab;
+                
+                // Désactiver tous les boutons et contenus du parent
+                parent.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                parent.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                // Activer le bouton et contenu sélectionné
+                btn.classList.add('active');
+                document.getElementById(tabName).classList.add('active');
+            });
+        });
 
         function init() {
             const viewerEl = document.getElementById('viewer');
@@ -149,7 +221,10 @@
 
         // --- BIBLIOTHÈQUE ---
         document.getElementById('extractBtn').onclick = () => {
-            library.push({
+            const meshType = selectedObject.name.toLowerCase().includes('hair') ? 'hair' : 
+                            selectedObject.name.toLowerCase().includes('beard') || selectedObject.name.toLowerCase().includes('facial') ? 'beard' : 'hair';
+            
+            const item = {
                 name: selectedObject.name,
                 tag: document.getElementById('tagInput').value.toUpperCase() || "SANS_TAG",
                 parentName: selectedObject.parent ? selectedObject.parent.name : null,
@@ -160,35 +235,70 @@
                 },
                 geometry: selectedObject.geometry.clone(),
                 material: selectedObject.material.clone()
-            });
-            updateLibraryUI();
+            };
+            
+            if (meshType === 'hair') {
+                hairLibrary.push(item);
+            } else {
+                beardLibrary.push(item);
+            }
+            
+            updateLibraryUI('hair');
+            updateLibraryUI('beard');
             document.getElementById('tagInput').value = "";
         };
 
-        function updateLibraryUI() {
-            const libList = document.getElementById('lib-list'); libList.innerHTML = "";
+        function updateLibraryUI(type) {
+            const library = type === 'hair' ? hairLibrary : beardLibrary;
+            const listId = type === 'hair' ? 'hair-mesh' : 'beard-mesh';
+            const libList = document.getElementById(listId);
+            libList.innerHTML = "";
+            
             library.forEach((item) => {
                 const div = document.createElement('div');
                 div.className = 'lib-item';
-                div.innerHTML = `<strong>${item.name}</strong><span class="tag-display"># ${item.tag}</span>`;
-                div.onclick = () => applyToModel(item);
+                
+                const title = document.createElement('strong');
+                title.textContent = item.name;
+                div.appendChild(title);
+                
+                const tag = document.createElement('span');
+                tag.className = 'tag-display';
+                tag.textContent = `# ${item.tag}`;
+                div.appendChild(tag);
+                
+                // Clic direct pour appliquer sans matériau
+                div.onclick = () => applyToModel(item, false);
+                
                 libList.appendChild(div);
             });
         }
 
-        function applyToModel(item) {
+        function applyToModel(itemNameOrObj, applyMaterial = false) {
             if (!currentModel) return;
+            
+            // Permet d'appeler avec un nom ou un objet directement
+            let item;
+            if (typeof itemNameOrObj === 'string') {
+                item = library.find(i => i.name === itemNameOrObj);
+                if (!item) return;
+            } else {
+                item = itemNameOrObj;
+            }
+            
             let found = false;
             currentModel.traverse(child => {
                 if (child.isMesh && child.name === item.name) {
                     child.geometry = item.geometry.clone();
-                    child.material = item.material.clone();
-                    if (child.material.map) {
-                        child.material.map.flipY = false;
-                        child.material.map.colorSpace = THREE.SRGBColorSpace;
-                        child.material.map.needsUpdate = true;
+                    if (applyMaterial) {
+                        child.material = item.material.clone();
+                        if (child.material.map) {
+                            child.material.map.flipY = false;
+                            child.material.map.colorSpace = THREE.SRGBColorSpace;
+                            child.material.map.needsUpdate = true;
+                        }
+                        child.material.needsUpdate = true;
                     }
-                    child.material.needsUpdate = true;
                     found = true;
                 }
             });
@@ -196,7 +306,7 @@
             if (found) return;
 
             // Ajoute le mesh si absent (ex: lunettes ou barbe inexistantes sur le modèle de base)
-            const newMesh = new THREE.Mesh(item.geometry.clone(), item.material.clone());
+            const newMesh = new THREE.Mesh(item.geometry.clone(), applyMaterial ? item.material.clone() : new THREE.MeshStandardMaterial({ color: 0x888888 }));
             newMesh.name = item.name;
             if (item.transform) {
                 newMesh.position.fromArray(item.transform.position);
@@ -204,7 +314,7 @@
                 newMesh.scale.fromArray(item.transform.scale);
                 newMesh.updateMatrix();
             }
-            if (newMesh.material.map) {
+            if (applyMaterial && newMesh.material.map) {
                 newMesh.material.map.flipY = false;
                 newMesh.material.map.colorSpace = THREE.SRGBColorSpace;
                 newMesh.material.map.needsUpdate = true;
@@ -217,9 +327,13 @@
             highlight(newMesh);
         }
 
+        window.applyToModel = applyToModel;
+
+
         // --- IMPORT / EXPORT ---
         document.getElementById('exportLib').onclick = () => {
-            const items = library.map(item => {
+            const allItems = [...hairLibrary, ...beardLibrary];
+            const items = allItems.map(item => {
                 const matJSON = item.material.toJSON();
                 if (item.material.map && item.material.map.image) {
                     const canvas = document.createElement('canvas');
@@ -235,15 +349,26 @@
             link.href = URL.createObjectURL(blob); link.download = 'avatar_library.json'; link.click();
         };
 
-        document.getElementById('importLib').onclick = () => document.getElementById('jsonInput').click();
-        document.getElementById('jsonInput').onchange = (e) => {
+        // Import Cheveux
+        document.getElementById('importHairLib').onclick = () => document.getElementById('hairMeshInput').click();
+        document.getElementById('hairMeshInput').onchange = (e) => {
+            loadLibrary(e, 'hair');
+        };
+
+        // Import Barbe
+        document.getElementById('importBeardLib').onclick = () => document.getElementById('beardMeshInput').click();
+        document.getElementById('beardMeshInput').onchange = (e) => {
+            loadLibrary(e, 'beard');
+        };
+
+        function loadLibrary(e, type) {
             const reader = new FileReader();
             reader.onload = (event) => {
                 const data = JSON.parse(event.target.result);
                 const matLoader = new THREE.MaterialLoader();
                 const geoLoader = new THREE.BufferGeometryLoader();
                 const texLoader = new THREE.TextureLoader();
-                library = data.items.map(d => {
+                const items = data.items.map(d => {
                     const cleanMatJSON = JSON.parse(JSON.stringify(d.mat));
                     if (cleanMatJSON.map) delete cleanMatJSON.map;
                     const material = matLoader.parse(cleanMatJSON);
@@ -262,10 +387,16 @@
                         material
                     };
                 });
-                updateLibraryUI();
+                
+                if (type === 'hair') {
+                    hairLibrary = items;
+                } else {
+                    beardLibrary = items;
+                }
+                updateLibraryUI(type);
             };
             reader.readAsText(e.target.files[0]);
-        };
+        }
 
         // --- ANALYSE IA & AUTO-MAPPING ---
         document.getElementById('apiImageInput').onchange = (e) => {
@@ -291,7 +422,8 @@
                 if (!mapping || mapping.length === 0) return;
                 const mappingLower = mapping.map(tag => tag.toLowerCase());
                 let count = 0;
-                library.forEach(item => {
+                const allLibrary = [...hairLibrary, ...beardLibrary];
+                allLibrary.forEach(item => {
                     if (mappingLower.includes(item.tag.toLowerCase())) {
                         applyToModel(item);
                         count++;
@@ -303,6 +435,121 @@
                 document.getElementById('apiStatus').innerText = "Erreur API";
             }
         };
+
+        // --- COULEURS DE CHEVEUX ET BARBE ---
+        document.getElementById('loadHairColors').onclick = () => document.getElementById('hairColorInput').click();
+        document.getElementById('loadBeardColors').onclick = () => document.getElementById('beardColorInput').click();
+        
+        document.getElementById('hairColorInput').onchange = (e) => {
+            loadColors(e, 'hair');
+        };
+
+        document.getElementById('beardColorInput').onchange = (e) => {
+            loadColors(e, 'beard');
+        };
+
+        function loadColors(e, type) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const data = JSON.parse(event.target.result);
+                if (type === 'hair') {
+                    hairColors = data.textures || [];
+                } else {
+                    beardColors = data.textures || [];
+                }
+                updateColorUI(type);
+            };
+            reader.readAsText(e.target.files[0]);
+        }
+
+        function updateColorUI(type) {
+            const colors = type === 'hair' ? hairColors : beardColors;
+            const containerId = type === 'hair' ? 'hair-colors' : 'beard-colors';
+            const container = document.getElementById(containerId);
+            const colorList = container.querySelector('.color-grid');
+            colorList.innerHTML = "";
+            
+            colors.forEach((colorItem, index) => {
+                const div = document.createElement('div');
+                div.className = 'color-item';
+                
+                // Convertir le tag hexa en couleur de fond
+                const colorHex = colorItem.tag.startsWith('#') ? colorItem.tag : `#${colorItem.tag}`;
+                div.style.backgroundColor = colorHex;
+                
+                const label = document.createElement('div');
+                label.className = 'color-label';
+                label.textContent = colorItem.tag;
+                div.appendChild(label);
+                
+                div.onclick = () => {
+                    applyColor(colorItem, type);
+                    // Marquer la couleur sélectionnée
+                    colorList.querySelectorAll('.color-item').forEach(el => el.classList.remove('selected'));
+                    div.classList.add('selected');
+                };
+                
+                colorList.appendChild(div);
+            });
+            
+            console.log(`${colors.length} couleurs de ${type === 'hair' ? 'cheveux' : 'barbe'} chargées`);
+        }
+
+        function applyColor(colorItem, type) {
+            if (!currentModel) {
+                alert("Veuillez d'abord charger un modèle");
+                return;
+            }
+            
+            if (!colorItem.images || colorItem.images.length === 0) {
+                alert("Aucune texture disponible pour cette couleur");
+                return;
+            }
+            
+            // Chercher le mesh approprié dans le modèle
+            let targetMesh = null;
+            const searchTerms = type === 'hair' ? ['Wolf3D_Hair', 'hair'] : ['Wolf3D_Beard', 'Wolf3D_Facial', 'beard', 'facial'];
+            
+            currentModel.traverse(child => {
+                if (child.isMesh && child.name) {
+                    for (const term of searchTerms) {
+                        if (child.name.includes(term) || child.name.toLowerCase().includes(term.toLowerCase())) {
+                            targetMesh = child;
+                            break;
+                        }
+                    }
+                }
+            });
+            
+            if (!targetMesh) {
+                alert(`Aucun mesh de ${type === 'hair' ? 'cheveux' : 'barbe'} trouvé dans le modèle`);
+                return;
+            }
+            
+            // Charger et appliquer la nouvelle texture
+            const texLoader = new THREE.TextureLoader();
+            const imageUrl = colorItem.images[0].url;
+            
+            const texture = texLoader.load(imageUrl, () => {
+                texture.flipY = false;
+                texture.colorSpace = THREE.SRGBColorSpace;
+                texture.needsUpdate = true;
+                
+                if (targetMesh.material) {
+                    targetMesh.material.map = texture;
+                    targetMesh.material.needsUpdate = true;
+                    console.log(`Couleur ${colorItem.tag} appliquée au ${type === 'hair' ? 'cheveux' : 'barbe'}`);
+                } else {
+                    console.warn(`Le mesh de ${type === 'hair' ? 'cheveux' : 'barbe'} n'a pas de matériau`);
+                }
+            }, undefined, (error) => {
+                console.error("Erreur lors du chargement de la texture:", error);
+                alert("Erreur lors de l'application de la couleur");
+            });
+        }
+
+        // Rendre les fonctions accessibles globalement
+        window.applyColor = applyColor;
     </script>
 </body>
 </html>
