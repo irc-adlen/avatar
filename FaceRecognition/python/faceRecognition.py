@@ -155,7 +155,7 @@ def check_camera():
     name = start_video_capture()
     url = 'http://host.docker.internal:8000/chat'
     hash = generate_unique_hash(conversations_collection)
-    if name is not None:
+    if name is not "Inconnu":
         myobj = {
             "prompt": f"Dis bonjour à {name}",
             "voice": "default_voice.wav",
