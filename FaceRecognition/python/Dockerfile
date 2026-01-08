@@ -27,7 +27,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY python/faceRecognition.py ./faceRecognition.py
 COPY python/readWebSocket.py ./readWebSocket.py
 COPY python/faces ./faces
-COPY ./start.sh ./start.sh
+COPY python/start.sh ./start.sh
 
 RUN chmod +x start.sh
 

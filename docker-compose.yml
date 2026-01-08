@@ -19,8 +19,6 @@ services:
     environment:
       - INSIGHTFACE_PROVIDER=CPUExecutionProvider
     volumes:
-      - ./FaceRecognition/python:/app:rw
-      - .env:/app/.env
       - ./FaceRecognition/insightface_models:/root/.insightface/models
     privileged: true
     networks:

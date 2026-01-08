@@ -1,5 +1,5 @@
 # On part d'une image PyTorch avec CUDA pour avoir les drivers GPU
-FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel
+FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -13,6 +13,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     git \
     wget \
+    python3 \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Installation de Rust
@@ -21,8 +23,9 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 
 # 3. Installation des dépendances Python
 # On installe moshi et huggingface_hub
-RUN pip install --upgrade pip && \
-    pip install "moshi==0.2.11" sphn sounddevice huggingface_hub msgpack websockets pydantic
+RUN pip install --upgrade pip
+RUN pip install "torch==2.9.0+cu128" --extra-index-url https://download.pytorch.org/whl/cu128
+RUN pip install "moshi==0.2.11" sphn sounddevice huggingface_hub msgpack websockets pydantic
 
 # On définit l'architecture GPU manuellement (86 = RTX 3090 / Ampere)
 # Cela empêche le script de chercher nvidia-smi pendant le build
