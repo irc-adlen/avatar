@@ -1,58 +1,86 @@
-from unsloth import FastLanguageModel
-from trl import SFTTrainer
-from transformers import TrainingArguments
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from trl import SFTTrainer, SFTConfig
 from datasets import load_dataset
+from peft import LoraConfig, get_peft_model
 
-# 1. Configuration (24Go par GPU est énorme pour un 8B, tu peux augmenter max_seq_length)
-max_seq_length = 4096 
-model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "unsloth/llama-3-8b-instruct-bnb-4bit",
-    max_seq_length = max_seq_length,
-    load_in_4bit = True,
+model_id = "unsloth/gemma-2-27b-it-bnb-4bit"
+
+# 1. Chargement du modèle (Pipeline Parallelism automatique)
+model = AutoModelForCausalLM.from_pretrained(
+    model_id,
+    device_map="auto", # Répartit le modèle sur GPU 0 et GPU 1
+    dtype=torch.bfloat16,
 )
 
-# 2. Correction des MLP layers (On ajoute gate, up, down_proj)
-model = FastLanguageModel.get_peft_model(
-    model,
-    r = 32,
-    target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
-                      "gate_proj", "up_proj", "down_proj"], # Ajoute ceux-là !
-    lora_alpha = 16,
-    lora_dropout = 0,
-    bias = "none",
-)
+# Activation des optimisations mémoire
+model.gradient_checkpointing_enable() 
 
-# 3. Chargement et Préparation du Dataset
+tokenizer = AutoTokenizer.from_pretrained(model_id)
+tokenizer.padding_side = 'right' 
+
+# 2. Configuration LoRA (Rank 16 pour économiser la VRAM)
+peft_config = LoraConfig(
+    r=64, 
+    lora_alpha=32,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+    lora_dropout=0.05,
+    bias="none",
+    task_type="CAUSAL_LM"
+)
+model = get_peft_model(model, peft_config)
+
+# 3. Préparation du Dataset
 dataset = load_dataset("json", data_files="dataset_final.jsonl", split="train")
 
-# FONCTION DE FORMATAGE (C'est ce qui manquait !)
-def formatting_prompts_func(examples):
-    instructions = examples["messages"]
-    texts = [tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False) for messages in instructions]
-    return { "text" : texts, }
+def formatting_prompts_func(example):
+    messages = example["messages"]
+    new_messages = []
+    system_content = ""
+    for msg in messages:
+        if msg["role"] == "system":
+            system_content = msg["content"] + "\n\n"
+        elif msg["role"] == "user":
+            if system_content:
+                new_messages.append({"role": "user", "content": system_content + msg["content"]})
+                system_content = ""
+            else:
+                new_messages.append(msg)
+        else:
+            new_messages.append(msg)
+    return {"text": tokenizer.apply_chat_template(new_messages, tokenize=False)}
 
-dataset = dataset.map(formatting_prompts_func, batched = True)
+dataset = dataset.map(formatting_prompts_func, remove_columns=dataset.column_names)
 
-# 4. Trainer
-trainer = SFTTrainer(
-    model = model,
-    tokenizer = tokenizer,
-    train_dataset = dataset,
-    dataset_text_field = "text", # On pointe vers le champ "text" généré par formatting_prompts_func
-    max_seq_length = max_seq_length,
-    args = TrainingArguments(
-        per_device_train_batch_size = 2,
-        gradient_accumulation_steps = 4,
-        warmup_steps = 5,
-        max_steps = 150,
-        learning_rate = 2e-4,
-        fp16 = False,
-        bf16 = True,
-        logging_steps = 1,
-        output_dir = "outputs",
-    ),
+# 4. Configuration SFT ultra-optimisée pour 2x24GB
+training_args = SFTConfig(
+    output_dir="./outputs_cpe_lyon",
+    dataset_text_field="text",
+    per_device_train_batch_size=1,
+    gradient_accumulation_steps=16, 
+    learning_rate=2e-4,
+    bf16=True,
+    max_steps=500,
+    logging_steps=1,
+    save_strategy="no",
+    optim="paged_adamw_8bit", # Indispensable pour ne pas saturer la VRAM
+    report_to="none",
+    gradient_checkpointing=True,
 )
 
+# 5. Initialisation du Trainer
+trainer = SFTTrainer(
+    model=model,
+    train_dataset=dataset,
+    args=training_args,
+)
+
+# Fix manuel de la longueur
+trainer.max_seq_length = 2048
+
+print("--- Entraînement de l'assistant CPE Lyon (Gemma-2-27B) ---")
 trainer.train()
 
-model.save_pretrained_gguf("model_cpe_lyon", tokenizer, quantization_method = "q4_k_m")
+# Sauvegarde
+model.save_pretrained("./model_cpe_27b_final")
+tokenizer.save_pretrained("./model_cpe_27b_final")
