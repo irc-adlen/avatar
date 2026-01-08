@@ -2,7 +2,7 @@ services:
   avatar:
     image: avatar
     build:
-      context: ./avatar
+      context: ./Avatar
       dockerfile: ./Dockerfile
     ports:
       - "5003:5003"
