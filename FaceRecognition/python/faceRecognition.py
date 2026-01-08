@@ -11,7 +11,7 @@ import secrets
 
 flaskApp = Flask(__name__)
 # ---------------- MongoDB ----------------
-MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb://mongo:27017/")
 MONGO_DB = os.environ.get("MONGO_DB", "cpe_assistant_db")
 MONGO_COLLECTION = os.environ.get("MONGO_COLLECTION", "people")
 

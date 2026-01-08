@@ -30,7 +30,7 @@ services:
 
   stt:
     build:
-      context: ./STT
+      context: ./STT/mqtt_and_STT
       dockerfile: ./Dockerfile
     image: stt:latest
     extra_hosts:
