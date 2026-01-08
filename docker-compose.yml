@@ -23,6 +23,8 @@ services:
       - .env:/app/.env
       - ./FaceRecognition/insightface_models:/root/.insightface/models
     privileged: true
+    networks:
+      - moshi_net
     ports:
       - "5006:5006"
     extra_hosts:
@@ -53,8 +55,11 @@ services:
     restart: always
     volumes:
       - mongo_data:/data/db # Persistance des données sur le disque
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
     networks:
       - moshi_net
+    ports:
+      - "27017:27017"
 
   # --- Service 1 : LLM (Ollama) ---
   ollama:

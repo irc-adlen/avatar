@@ -96,6 +96,7 @@ def generate_unique_hash(conversations_collection, length=16):
 # Load known faces at startup
 try:
     known_faces = select_allPeople()
+    print(f"Loaded {len(known_faces)} known faces from MongoDB.")
 except Exception as e:
     print("Warning: could not load known faces:", e)
     known_faces = {}
@@ -153,6 +154,7 @@ def start_video_capture():
 def check_camera():
     global conversations_collection
     name = start_video_capture()
+    print(name)
     url = 'http://host.docker.internal:8000/chat'
     hash = generate_unique_hash(conversations_collection)
     if name is not "Inconnu":
@@ -167,7 +169,7 @@ def check_camera():
             "voice": "default_voice.wav",
             "session_id": hash
         }
-
+    print(myobj)
     requests.post(url, json=myobj)
     return Response(status=200)
 
