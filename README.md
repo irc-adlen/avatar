@@ -1,9 +1,13 @@
-# Face Recognition
+# Launch the project
 
-This folder contains the code to recognize the photos available in the [faces](./FaceRecognition/python/faces/) folder.
+All the project can be started with the [docker compose](./docker-compose.yml).
+On the first launch, plenty of AI models will be downloaded. It might take a long time.
 
-To see more, click [here](./FaceRecognition/).
+### Mic configuration
 
-# STT
+At first lauch, the stt shoul crash. In the logs you will find all the camera devices available.
+You have to change the `INPUT_DEVICE` variable in the [voice recorder](./STT/voice_recorder.py) file.
 
-All the STT code (the voice recorder and the whisperV3) are under [this](./STT/) folder.
+### Camera configuration
+
+A camera have to be plugged for the project to work.
