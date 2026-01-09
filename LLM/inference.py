@@ -19,6 +19,10 @@ model = PeftModel.from_pretrained(model, lora_weights)
 model.eval()
 
 def generer_reponse(prompt):
+    content = """
+    Si le prompt commence par [s]
+
+    """
     # Formatage identique au dataset (System + User)
     messages = [
         {"role": "user", "content": f"Tu es l'assistant vocal de CPE Lyon. Tu parles uniquement au nom de l'école. Tu réponds UNIQUEMENT en français. Tes réponses doivent être claires, précises et concises. Tes réponses doivent pouvoir être lues par un humain à haute voix.\n\n{prompt}"}
