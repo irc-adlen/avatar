@@ -5,7 +5,12 @@ services:
       context: ./Avatar
       dockerfile: ./Dockerfile
     ports:
-      - "5033:5003"
+      - "5003:5003"
+    dns:                # <--- AJOUTER CECI
+      - 8.8.8.8         # Google DNS
+      - 1.1.1.1
+    volumes:
+    - ./captures:/app/captures
     extra_hosts:
     - "host.docker.internal:host-gateway"
 

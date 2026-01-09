@@ -4,25 +4,48 @@ import threading
 import time
 from voice_recorder import start_recording
 from whisperv3 import transcribe_audio, init
-from flask import Flask, Response
+from flask import Flask, Response, request
+from flask_cors import CORS
 
 flaskApp = Flask(__name__)
+CORS(flaskApp)
 is_next_unknown_person = False
 
-@flaskApp.route('/start_session', methods=['GET'])
+@flaskApp.route('/start_session', methods=['GET', 'OPTIONS'])
 def start_session():
-    run_stt_with_timeout()
-    return Response(
-            status=200,
-        ) 
+    if request.method == 'OPTIONS':
+        return Response(status=200, headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type"
+        })
+    
+    try:
+        # Lancer le STT dans un thread séparé pour ne pas bloquer la réponse
+        thread = threading.Thread(target=run_stt_with_timeout)
+        thread.daemon = True
+        thread.start()
+        
+        return Response(status=200, headers={"Access-Control-Allow-Origin": "*"}) 
+    except Exception as e:
+        print(f"Error in start_session: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return Response(status=500, headers={"Access-Control-Allow-Origin": "*"}) 
 
-@flaskApp.route('/unknown_person', methods=['GET'])
+@flaskApp.route('/unknown_person', methods=['GET', 'OPTIONS'])
 def unknown_person():
+    if request.method == "OPTIONS":
+        return Response(status=200, headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type"
+        })
+    
     global is_next_unknown_person
     is_next_unknown_person = True
-    return Response(
-            status=200,
-        ) 
+
+    return Response(status=200, headers={"Access-Control-Allow-Origin": "*"}) 
 
 
 logging.basicConfig(

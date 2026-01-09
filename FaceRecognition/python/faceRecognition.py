@@ -158,7 +158,7 @@ def start_video_capture():
             best_bbox = (x1, y1, x2, y2)
 
     # Save cropped image of the best face
-    if best_bbox is not None and best_name_size != "Inconnu":
+    if best_bbox is not None:
         x1, y1, x2, y2 = best_bbox
 
         # Ensure coordinates stay within frame boundaries

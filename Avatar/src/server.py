@@ -14,7 +14,7 @@ CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'data')
-IMG_PATH = './img.jpg'
+IMG_PATH = '/app/captures/new_user.jpg'
 GLB_BASE_PATH = os.path.join(DATA_FOLDER, 'avatar_custom_20260108_173302.glb')
 
 model_id = "openai/clip-vit-large-patch14"
@@ -128,6 +128,9 @@ def trigger():
         })
         return jsonify({"status": "success", "features": features})
     except Exception as e:
+        print(f"Error in /trigger: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         socketio.emit('avatar_update', {'status': 'error', 'message': str(e)})
         return jsonify({"status": "error", "message": str(e)}), 500
 
