@@ -20,18 +20,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install
-COPY python/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy application and faces directory into the image
-COPY python/faceRecognition.py ./faceRecognition.py
-COPY python/readWebSocket.py ./readWebSocket.py
-COPY python/faces ./faces
-COPY ./start.sh ./start.sh
+COPY faceRecognition.py /app/faceRecognition.py
+COPY readWebSocket.py /app/readWebSocket.py
+COPY faces /app/faces
+COPY start.sh /app/start.sh
 
-RUN chmod +x start.sh
+RUN chmod +x /app/start.sh
 
 # Ensure Qt uses xcb platform plugin by default inside container
 ENV QT_QPA_PLATFORM=xcb
 
-CMD ["./start.sh"]
+CMD ["/app/start.sh"]

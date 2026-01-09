@@ -163,10 +163,10 @@ def start_video_capture():
 
         # Ensure coordinates stay within frame boundaries
         h, w, _ = frame.shape
-        x1 = max(0, x1)
-        y1 = max(0, y1)
-        x2 = min(w, x2)
-        y2 = min(h, y2)
+        x1 = max(0, x1-20)
+        y1 = max(0, y1-35)
+        x2 = min(w, x2+20)
+        y2 = min(h, y2+15)
 
         face_crop = frame[y1:y2, x1:x2]
 
@@ -197,7 +197,7 @@ def check_camera():
     print(name)
     url = 'http://host.docker.internal:8000/chat'
     hash = generate_unique_hash(conversations_collection)
-    if name is not "Inconnu":
+    if name != "Inconnu":
         myobj = {
             "prompt": f"Dis bonjour à {name}",
             "voice": "default_voice.wav",

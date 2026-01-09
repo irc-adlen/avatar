@@ -5,22 +5,20 @@ services:
       context: ./Avatar
       dockerfile: ./Dockerfile
     ports:
-      - "5003:5003"
+      - "5033:5003"
     extra_hosts:
     - "host.docker.internal:host-gateway"
 
   faceapp:
     build:
       context: ./FaceRecognition
-      dockerfile: python/Dockerfile
+      dockerfile: ./python/Dockerfile
     image: faceapp:latest
     devices:
       - "/dev/video0:/dev/video0"
     environment:
       - INSIGHTFACE_PROVIDER=CPUExecutionProvider
     volumes:
-      - ./FaceRecognition/python:/app:rw
-      - .env:/app/.env
       - ./FaceRecognition/insightface_models:/root/.insightface/models
       - ./captures:/app/captures
     privileged: true
@@ -28,6 +26,8 @@ services:
       - moshi_net
     ports:
       - "5006:5006"
+    depends_on:
+      - agent
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
