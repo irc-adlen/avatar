@@ -15,6 +15,8 @@ MONGO_URI = os.environ.get("MONGO_URI", "mongodb://mongo:27017/")
 MONGO_DB = os.environ.get("MONGO_DB", "cpe_assistant_db")
 MONGO_COLLECTION = os.environ.get("MONGO_COLLECTION", "people")
 
+NEW_USER_FILE="captures/new_user.jpg"
+
 mongo_client = MongoClient(MONGO_URI)
 mongo_db = mongo_client[MONGO_DB]
 people_collection = mongo_db[MONGO_COLLECTION]
@@ -115,11 +117,14 @@ def start_video_capture():
 
     ret, frame = cap.read()
     if not ret:
+        cap.release()
         return None
 
     faces = app.get(frame)
+
     best_name_size = None
     best_size = -1
+    best_bbox = None  # Store bounding box of best face
 
     for face in faces:
         emb = face.embedding
@@ -143,12 +148,47 @@ def start_video_capture():
             update_detection(best_name, known_faces[best_name]["promo"], datetime.now())
             known_faces[best_name]["lastSeen"] = datetime.now()
 
+        # Bounding box selection based on face size
         x1, y1, x2, y2 = face.bbox.astype(int)
-        if x2 - x1 > best_size:
-            best_size = x2 - x1
-            best_name_size = best_name
+        face_width = x2 - x1
 
+        if face_width > best_size:
+            best_size = face_width
+            best_name_size = best_name
+            best_bbox = (x1, y1, x2, y2)
+
+    # Save cropped image of the best face
+    if best_bbox is not None and best_name_size != "Inconnu":
+        x1, y1, x2, y2 = best_bbox
+
+        # Ensure coordinates stay within frame boundaries
+        h, w, _ = frame.shape
+        x1 = max(0, x1)
+        y1 = max(0, y1)
+        x2 = min(w, x2)
+        y2 = min(h, y2)
+
+        face_crop = frame[y1:y2, x1:x2]
+
+        if face_crop.size > 0:
+            cv2.imwrite(NEW_USER_FILE, face_crop)
+
+    cap.release()
     return best_name_size
+
+def capture_image(path):
+    # Changer ça pour prendre la dernière image save dans NEW_USER_FILE.
+    # Et l'enregister dans la base.
+    cap = cv2.VideoCapture(0)
+    # Read one frame from the camera
+    ret, frame = cap.read()
+    if not ret:
+        print("Failed to capture image")
+        cap.release()
+        exit(1)
+
+    # Save the captured frame as an image file
+    cv2.imwrite(path, frame)
 
 @flaskApp.route('/check_camera', methods=['GET'])
 def check_camera():
@@ -170,6 +210,8 @@ def check_camera():
             "session_id": hash
         }
     print(myobj)
+    avatar_url = 'http://host.docker.internal:5003/trigger'
+    requests.get(avatar_url)
     requests.post(url, json=myobj)
     return Response(status=200)
 
@@ -181,18 +223,7 @@ def save_image():
     # Parse JSON body
     data = request.get_json()
 
-    cap = cv2.VideoCapture(0)
-
-    # Read one frame from the camera
-    ret, frame = cap.read()
-    if not ret:
-        print("Failed to capture image")
-        cap.release()
-        exit(1)
-
-    # Save the captured frame as an image file
-    output_path = "captured_image.jpg"
-    cv2.imwrite(output_path, frame)
+    capture_image(data["path"]) # à changer (je ne sais pas encore ce que va être le nom du champ)
     return Response(status=200)
 
 

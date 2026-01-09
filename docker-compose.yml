@@ -22,6 +22,7 @@ services:
       - ./FaceRecognition/python:/app:rw
       - .env:/app/.env
       - ./FaceRecognition/insightface_models:/root/.insightface/models
+      - ./captures:/app/captures
     privileged: true
     networks:
       - moshi_net
