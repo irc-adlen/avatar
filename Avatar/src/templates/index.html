@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <title>TalkingHead - Auto Wake Up</title>
+  <title>TalkingHead Avatar</title>
   <style>
     body, html { width: 100%; height: 100%; margin: 0; background: #202020; color: white; font-family: sans-serif; }
     #avatar { width: 100%; height: 100%; }
@@ -30,29 +30,280 @@
   <div id="avatar"></div>
   <div id="loading">Chargement Avatar...</div>
   <div id="overlay"><button id="startBtn" disabled>CHARGEMENT...</button></div>
+
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script type="module">
 import { TalkingHead } from "talkinghead";
+import * as THREE from "three";
 
 let head;
 let socket = null;
-let mqttClient = null;
+let hairLibrary = [];
+let beardLibrary = [];
+let hairColors = [];
+let beardColors = [];
+let eyesColors = [];
+let skinColors = [];
 
-// ==========================================
-// 1. CONFIGURATION DU STREAM
-// ==========================================
-// On stocke les options ici pour pouvoir relancer le stream facilement
+async function loadLibraries() {
+  try {
+    const hairRes = await fetch('data/hair_meshs.json');
+    const hairData = await hairRes.json();
+    hairLibrary = parseLibrary(hairData.items || []);
+  } catch (e) {}
+
+  try {
+    const beardRes = await fetch('data/beard_meshs.json');
+    const beardData = await beardRes.json();
+    beardLibrary = parseLibrary(beardData.items || []);
+  } catch (e) {}
+
+  try {
+    const res = await fetch('data/hair_color_library.json');
+    hairColors = (await res.json()).textures || [];
+  } catch (e) {}
+
+  try {
+    const res = await fetch('data/beard_color_library.json');
+    beardColors = (await res.json()).textures || [];
+  } catch (e) {}
+
+  try {
+    const res = await fetch('data/eyes_color_library.json');
+    eyesColors = (await res.json()).textures || [];
+  } catch (e) {}
+
+  try {
+    const res = await fetch('data/skin_color_library.json');
+    skinColors = (await res.json()).textures || [];
+  } catch (e) {}
+}
+
+function parseLibrary(items) {
+  const matLoader = new THREE.MaterialLoader();
+  const geoLoader = new THREE.BufferGeometryLoader();
+  const texLoader = new THREE.TextureLoader();
+  
+  return items.map(d => {
+    const cleanMatJSON = JSON.parse(JSON.stringify(d.mat));
+    if (cleanMatJSON.map) delete cleanMatJSON.map;
+    const material = matLoader.parse(cleanMatJSON);
+    if (d.mat.images && d.mat.images.length > 0) {
+      const texture = texLoader.load(d.mat.images[0].url);
+      texture.flipY = false;
+      texture.colorSpace = THREE.SRGBColorSpace;
+      material.map = texture;
+    }
+    return {
+      name: d.name,
+      tag: d.tag,
+      parentName: d.parentName || null,
+      transform: d.transform || null,
+      geometry: geoLoader.parse(d.geo),
+      material
+    };
+  });
+}
+
+function applyFeaturesToModel(model, features) {
+  let modifications = [];
+
+  if (features.hair) {
+    const hairItem = hairLibrary.find(item => 
+      item.tag.toLowerCase().includes(features.hair.toLowerCase().replace(/ /g, '_')) ||
+      features.hair.toLowerCase().replace(/ /g, '_').includes(item.tag.toLowerCase())
+    );
+    if (hairItem) {
+      applyMesh(model, hairItem);
+      modifications.push(`Hair: ${hairItem.tag}`);
+    }
+  }
+
+  if (features.beard && features.beard.toLowerCase() !== 'no_beard') {
+    const beardItem = beardLibrary.find(item =>
+      item.tag.toLowerCase().includes(features.beard.toLowerCase().replace(/ /g, '_')) ||
+      features.beard.toLowerCase().replace(/ /g, '_').includes(item.tag.toLowerCase())
+    );
+    if (beardItem) {
+      applyMesh(model, beardItem);
+      modifications.push(`Beard: ${beardItem.tag}`);
+    }
+  }
+
+  if (features.hair_color) {
+    const colorItem = hairColors.find(c => c.tag === features.hair_color);
+    if (colorItem) {
+      applyColorTexture(model, 'Wolf3D_Hair', colorItem);
+      modifications.push(`Hair color: ${features.hair_color}`);
+    }
+  }
+
+  if (features.beard_color) {
+    const colorItem = beardColors.find(c => c.tag === features.beard_color);
+    if (colorItem) {
+      applyColorTexture(model, 'Wolf3D_Beard', colorItem);
+      modifications.push(`Beard color: ${features.beard_color}`);
+    }
+  }
+
+  if (features.eyes_color) {
+    const colorItem = eyesColors.find(c => c.tag === features.eyes_color);
+    if (colorItem) {
+      applyColorTexture(model, 'EyeLeft', colorItem);
+      applyColorTexture(model, 'EyeRight', colorItem);
+      modifications.push(`Eyes color: ${features.eyes_color}`);
+    }
+  }
+
+  const skinColor = features.skin_tone || features.skin_color;
+  if (skinColor) {
+    const colorItem = skinColors.find(c => c.tag === skinColor);
+    if (colorItem) {
+      applyColorTexture(model, 'Wolf3D_Head', colorItem);
+      applyColorTexture(model, 'Wolf3D_Body', colorItem);
+      modifications.push(`Skin: ${skinColor}`);
+    }
+  }
+
+  return modifications;
+}
+
+function applyMesh(model, item) {
+  let existingMesh = null;
+  let referenceMesh = null;
+  
+  model.traverse(child => {
+    if (child.isMesh && child.name === item.name) {
+      existingMesh = child;
+    }
+    if (child.isSkinnedMesh && child.name === 'Wolf3D_Head') {
+      referenceMesh = child;
+    }
+  });
+  
+  if (existingMesh && existingMesh.isSkinnedMesh) {
+    const newGeo = item.geometry.clone();
+    const oldGeo = existingMesh.geometry;
+    
+    if (oldGeo.attributes.skinIndex && oldGeo.attributes.skinWeight) {
+      if (newGeo.attributes.position.count === oldGeo.attributes.position.count) {
+        newGeo.setAttribute('skinIndex', oldGeo.attributes.skinIndex.clone());
+        newGeo.setAttribute('skinWeight', oldGeo.attributes.skinWeight.clone());
+      } else {
+        const count = newGeo.attributes.position.count;
+        const skinIndices = new Float32Array(count * 4);
+        const skinWeights = new Float32Array(count * 4);
+        const headBoneIndex = existingMesh.skeleton.bones.findIndex(b => b.name === 'Head');
+        const boneIdx = headBoneIndex >= 0 ? headBoneIndex : 0;
+        
+        for (let i = 0; i < count; i++) {
+          skinIndices[i * 4] = boneIdx;
+          skinWeights[i * 4] = 1;
+        }
+        newGeo.setAttribute('skinIndex', new THREE.BufferAttribute(new Uint16Array(skinIndices), 4));
+        newGeo.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeights, 4));
+      }
+    }
+    
+    existingMesh.geometry = newGeo;
+    existingMesh.material = item.material.clone();
+    if (existingMesh.material.map) {
+      existingMesh.material.map.flipY = false;
+      existingMesh.material.map.colorSpace = THREE.SRGBColorSpace;
+    }
+    existingMesh.material.needsUpdate = true;
+  } else if (!existingMesh && referenceMesh) {
+    const newGeo = item.geometry.clone();
+    const count = newGeo.attributes.position.count;
+    const headBoneIndex = referenceMesh.skeleton.bones.findIndex(b => b.name === 'Head');
+    const boneIdx = headBoneIndex >= 0 ? headBoneIndex : 0;
+    
+    const skinIndices = new Uint16Array(count * 4);
+    const skinWeights = new Float32Array(count * 4);
+    
+    for (let i = 0; i < count; i++) {
+      skinIndices[i * 4] = boneIdx;
+      skinWeights[i * 4] = 1;
+    }
+    
+    newGeo.setAttribute('skinIndex', new THREE.BufferAttribute(skinIndices, 4));
+    newGeo.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeights, 4));
+    
+    const newMesh = new THREE.SkinnedMesh(newGeo, item.material.clone());
+    newMesh.name = item.name;
+    
+    if (newMesh.material.map) {
+      newMesh.material.map.flipY = false;
+      newMesh.material.map.colorSpace = THREE.SRGBColorSpace;
+    }
+    
+    newMesh.bind(referenceMesh.skeleton, referenceMesh.bindMatrix);
+    referenceMesh.parent.add(newMesh);
+  }
+}
+
+function applyColorTexture(model, meshName, colorItem) {
+  if (!colorItem.images || colorItem.images.length === 0) return;
+  
+  const texLoader = new THREE.TextureLoader();
+  
+  model.traverse(child => {
+    if (child.isMesh && child.name && child.name.includes(meshName)) {
+      const texture = texLoader.load(colorItem.images[0].url);
+      texture.flipY = false;
+      texture.colorSpace = THREE.SRGBColorSpace;
+      
+      if (child.material) {
+        child.material.map = texture;
+        child.material.needsUpdate = true;
+      }
+    }
+  });
+}
+
+function applyFeaturesToTalkingHead(headInstance, features) {
+  let model = null;
+  
+  const possiblePaths = [
+    headInstance.avatar,
+    headInstance.model,
+    headInstance.scene,
+    headInstance.armature,
+    headInstance.object3D,
+    headInstance.mesh
+  ];
+  
+  for (const path of possiblePaths) {
+    if (path && typeof path.traverse === 'function') {
+      model = path;
+      break;
+    }
+  }
+  
+  if (!model) {
+    for (const key of Object.keys(headInstance)) {
+      const val = headInstance[key];
+      if (val && typeof val === 'object' && typeof val.traverse === 'function') {
+        model = val;
+        break;
+      }
+    }
+  }
+  
+  if (!model) return [];
+  
+  return applyFeaturesToModel(model, features);
+}
+
 const STREAM_OPTIONS = {
-    sampleRate: 24000, 
-    lipsyncType: "words", 
-    gain: 2.0,
-    lipsyncLang: 'en'
+  sampleRate: 24000, 
+  lipsyncType: "words", 
+  gain: 2.0,
+  lipsyncLang: 'en'
 };
 
-// ==========================================
-// 2. OUTILS DE CONVERSION
-// ==========================================
 function float32ToInt16(float32Array) {
   const int16Array = new Int16Array(float32Array.length);
   for (let i = 0; i < float32Array.length; i++) {
@@ -69,78 +320,41 @@ function base64ToFloat32(b64) {
   return new Float32Array(bytes.buffer);
 }
 
-// ==========================================
-// 3. LOGIQUE SOCKET INTELLIGENTE
-// ==========================================
-
-function send_finish(){
-  const url = "http://localhost:5007/start_session"; // Remplacez par votre URL
-
-  fetch(url)
-      .then(response => {
-          if (response.ok) {
-              console.log("✅ Requête GET envoyée avec succès !");
-          } else {
-              console.error("⚠️ Erreur serveur :", response.status);
-          }
-      })
-      .catch(error => {
-          console.error("❌ Erreur réseau ou technique :", error);
-      });
+function send_finish() {
+  fetch("http://localhost:5007/start_session").catch(() => {});
 }
 
-// Cette fonction vérifie si l'avatar dort. Si oui, elle le réveille.
 function ensureAvatarIsListening() {
-    if (head && !head.isStreaming) {
-        console.log("🔔 Réveil de l'avatar (Nouvelle phrase détectée)");
-        head.streamStart(STREAM_OPTIONS, null, () => {
-                console.log("🛑 FIN DE PAROLE (Trigger détecté !)");
-                send_finish();
-            });
-    }
+  if (head && !head.isStreaming) {
+    head.streamStart(STREAM_OPTIONS, null, () => { send_finish(); });
+  }
 }
 
 function connectSocket() {
-  // Reset initial
   if (socket) socket.close();
   if (head && head.isStreaming) head.streamStop();
 
   socket = new WebSocket("ws://localhost:8000/stream/audio");
 
-
-
   socket.onopen = () => {
-    console.log("🟢 WS Connecté");
-    // Premier démarrage
-    head.streamStart(STREAM_OPTIONS,null, () => {
-                console.log("🛑 FIN DE PAROLE (Trigger détecté !)");
-                send_finish();
-                        
-            });
+    head.streamStart(STREAM_OPTIONS, null, () => { send_finish(); });
   };
 
   socket.onmessage = (e) => {
     const msg = JSON.parse(e.data);
 
-    // --- AUDIO ---
     if (msg.type === "audio") {
-      // 1. D'abord, on s'assure que le stream est ouvert !
       ensureAvatarIsListening();
-
       const f32 = base64ToFloat32(msg.data);
       const pcm16 = float32ToInt16(f32);
       head.streamAudio({ audio: pcm16 });
     } 
-    
-    // --- MOTS ---
     else if (msg.type === "meta") {
       const c = msg.content || {};
       const word = c.text || c.word;
 
       if (word) {
-        // 1. Ici aussi, on vérifie (au cas où les mots arrivent avant le son)
         ensureAvatarIsListening();
-
         head.streamAudio({
           audio: new ArrayBuffer(0), 
           words: [word],
@@ -151,36 +365,55 @@ function connectSocket() {
     }
   };
 
-  socket.onerror = (err) => console.error("🔴 Erreur Socket:", err);
+  socket.onerror = () => {};
 }
 
-// ==========================================
-// 4. MAIN
-// ==========================================
+let avatarSocket = null;
+
+function initAvatarWebSocket() {
+  avatarSocket = io();
+  
+  avatarSocket.on('avatar_update', async (data) => {
+    if (data.status === 'success' && data.features) {
+      await new Promise(resolve => setTimeout(resolve, 300));
+      applyFeaturesToTalkingHead(head, data.features);
+    }
+  });
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   const btn = document.getElementById("startBtn");
   const loading = document.getElementById("loading");
+  const glbUrl = 'data/avatar_custom_20260108_173302.glb';
 
   try {
+    loading.innerText = "Chargement...";
+    await loadLibraries();
+    
     head = new TalkingHead(document.getElementById("avatar"), {
-              ttsEndpoint: "https://eu-texttospeech.googleapis.com/v1beta1/text:synthesize",
-        ttsApikey: "AIzaSyDDRrScM3t-ko-5s-YCapCxdw5O0E52Hf0", // <- Change this
-      cameraView: "upper"
+      ttsEndpoint: "https://eu-texttospeech.googleapis.com/v1beta1/text:synthesize",
+      ttsApikey: "AIzaSyDDRrScM3t-ko-5s-YCapCxdw5O0E52Hf0",
+      cameraView: "upper",
+      lightAmbientColor: 0xffffff,
+      lightAmbientIntensity: 0.4,
+      lightDirectColor: 0xffffff,
+      lightDirectIntensity: 0.6
     });
 
     await head.showAvatar({
-      url: "https://models.readyplayer.me/693fc00c14ff705000213c26.glb?morphTargets=ARKit,Oculus+Visemes,mouthOpen,mouthSmile,eyesClosed,eyesLookUp,eyesLookDown",
+      url: glbUrl,
       body: "F",
       avatarMood: "neutral",
       lipsyncLang: "en" 
     });
+
+    initAvatarWebSocket();
 
     loading.style.display = "none";
     btn.innerText = "DÉMARRER";
     btn.disabled = false;
 
   } catch (err) {
-    console.error(err);
     loading.innerText = "ERREUR";
     loading.style.color = "red";
   }
@@ -188,7 +421,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   btn.addEventListener("click", async () => {
     document.getElementById("overlay").style.display = "none";
     if (head.audioCtx.state === "suspended") await head.audioCtx.resume();
-   
     connectSocket();
   });
 });
