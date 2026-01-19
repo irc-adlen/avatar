@@ -17,6 +17,8 @@ MONGO_COLLECTION = os.environ.get("MONGO_COLLECTION", "people")
 
 NEW_USER_FILE="captures/new_user.jpg"
 
+can_trigger = True
+
 mongo_client = MongoClient(MONGO_URI)
 mongo_db = mongo_client[MONGO_DB]
 people_collection = mongo_db[MONGO_COLLECTION]
@@ -192,6 +194,9 @@ def capture_image(path):
 
 @flaskApp.route('/check_camera', methods=['GET'])
 def check_camera():
+    global can_trigger
+    if not can_trigger:
+        return Response(status=401)  
     global conversations_collection
     name = start_video_capture()
     print(name)
@@ -213,6 +218,7 @@ def check_camera():
     avatar_url = 'http://host.docker.internal:5003/trigger'
     requests.get(avatar_url)
     requests.post(url, json=myobj)
+    can_trigger = False
     return Response(status=200)
 
 @flaskApp.route('/save_image', methods=['POST'])
@@ -226,6 +232,11 @@ def save_image():
     capture_image(data["path"]) # à changer (je ne sais pas encore ce que va être le nom du champ)
     return Response(status=200)
 
+@flaskApp.route('/reset', methods=['GET'])
+def reset():
+    global can_trigger
+    can_trigger = True
+    return Response(status=200)
 
 def main():
     flaskApp.run(host='0.0.0.0', port=5006)
