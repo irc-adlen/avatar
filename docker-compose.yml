@@ -79,7 +79,7 @@ services:
 
       # Indique où trouver Moshi (host.docker.internal = votre machine physique)
       # Si Moshi est un autre conteneur, mettez son nom ici.
-      - MOSHI_HOST=moshi
+      - MOSHI_HOST=host.docker.internal
     extra_hosts:
       # Permet au conteneur de voir le localhost de votre machine Ubuntu
       - "host.docker.internal:host-gateway"
@@ -100,7 +100,7 @@ services:
     build: ./LLM
     container_name: cpe-brain
     ports:
-      - "8001:8001"
+      - "8001:8000"
     volumes:
       # Vos documents pour le RAG
       - ./LLM/data:/data
