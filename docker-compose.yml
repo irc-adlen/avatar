@@ -131,13 +131,8 @@ services:
     volumes:
       - moshi_data:/app/data_moshi # Persistance des modèles
     gpus: all
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=1  # Spécifie la carte GPU à utiliser (ajuster selon le système)
     networks:
       - moshi_net
 
