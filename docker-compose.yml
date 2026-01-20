@@ -91,6 +91,13 @@ services:
       - cpe-brain
     networks:
       - cpe-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   # ==========================================
   # LLM : CERVEAU (Intelligence / GPU)
