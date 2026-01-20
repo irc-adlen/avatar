@@ -118,7 +118,9 @@ async def process_conversation(request: ChatRequest):
             # --- TÂCHE B : Recevoir l'Audio de Moshi et l'envoyer au Client ---
             async def task_moshi_consumer():
                 try:
+                    print(">>> [Moshi] En attente de l'audio...")
                     async for message in moshi_ws:
+                        print(">>> [Moshi] Message audio reçu")
                         data = msgpack.unpackb(message, raw=False)
                         msg_type = data.get("type")
                         
@@ -137,6 +139,7 @@ async def process_conversation(request: ChatRequest):
                         # On ignore les métadonnées pour alléger
                             
                 except websockets.ConnectionClosed:
+                    print(">>> [Moshi] Connexion fermée")
                     pass
                 except Exception as e:
                     print(f"!!! Moshi Error: {e}")
