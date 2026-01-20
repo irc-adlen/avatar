@@ -52,7 +52,13 @@ services:
       - /dev/snd:/dev/snd
     group_add:
       - "audio"
-    gpus: all
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     restart: unless-stopped
 
   mongo:
