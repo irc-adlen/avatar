@@ -1,18 +1,18 @@
+# Image optimisée pour NVIDIA
 FROM vllm/vllm-openai:latest
 
-# INSTALLATION OF ALL MODULES (Brain, Mouth, Memory, RAG)
+# Installation des dépendances pour la Logique, la Mémoire et le RAG
 RUN pip install --no-cache-dir \
-    fastapi uvicorn pydantic requests \
-    pymongo \
-    TTS \
+    fastapi uvicorn pydantic requests pymongo \
     langchain langchain-community langchain-huggingface langchain-chroma chromadb pypdf sentence-transformers \
-    scipy
+    einops
 
+# Configuration du dossier de travail
 WORKDIR /app
 COPY /app/main.py /app/main.py
 
-# Create data directories
+# Création des dossiers pour les PDF et la Base Vectorielle
 RUN mkdir -p /data /vector_db
 
-# Run the Monolith
+# Lancement du serveur
 ENTRYPOINT ["python3", "main.py"]
