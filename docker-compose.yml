@@ -102,6 +102,7 @@ services:
     build:
       context: ./LLM
       dockerfile: ./Dockerfile
+    image: cpe-brain:latest
     container_name: cpe-brain
     ports:
       - "8001:8000"
