@@ -72,7 +72,7 @@ services:
   # LLM : ORCHESTRATEUR (Gateway / CPU)
   # ==========================================
   orchestrator:
-    build: ./LLM
+    build: ./TTS/api
     image: cpe-orchestrator:latest
     container_name: cpe-orchestrator
     ports:
@@ -103,7 +103,7 @@ services:
   # LLM : CERVEAU (Intelligence / GPU)
   # ==========================================
   cpe-brain:
-    build: ./TTS/api
+    build: ./LLM
     container_name: cpe-brain
     ports:
       - "8000:8000"
