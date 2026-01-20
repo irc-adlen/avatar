@@ -153,7 +153,7 @@ async def brain_endpoint(req: BrainRequest):
         
         # B1. Vérification du contexte (Est-ce une réponse à "Quel est ton nom ?")
         last_bot = None
-        if chat_collection:
+        if chat_collection is not None:
             last_bot = chat_collection.find_one(
                 {"session_id": req.session_id, "role": "assistant"}, 
                 sort=[("timestamp", -1)]
