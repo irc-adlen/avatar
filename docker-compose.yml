@@ -32,7 +32,7 @@ services:
     ports:
       - "5006:5006"
     depends_on:
-      - agent
+      - orchestrator
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -72,7 +72,8 @@ services:
   # LLM : ORCHESTRATEUR (Gateway / CPU)
   # ==========================================
   orchestrator:
-    build: ./LLM/app
+    build: ./LLM
+    image: cpe-orchestrator:latest
     container_name: cpe-orchestrator
     ports:
       - "8001:8001"
@@ -101,9 +102,9 @@ services:
       - "8000:8000"
     volumes:
       # Vos documents pour le RAG
-      - ../LLM/data:/data
+      - ./LLM/data:/data
       # La persistance de l'index vectoriel (pour ne pas réindexer à chaque fois)
-      - ../LLM/vector_db:/vector_db
+      - ./LLM/vector_db:/vector_db
       # Cache HuggingFace pour ne pas retélécharger le modèle Mistral à chaque reboot
       - hf_cache:/root/.cache/huggingface
     environment:
