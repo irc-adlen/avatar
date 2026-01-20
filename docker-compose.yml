@@ -76,7 +76,7 @@ services:
     image: cpe-orchestrator:latest
     container_name: cpe-orchestrator
     ports:
-      - "8001:8001"
+      - "8000:8000"
     environment:
       # Indique où trouver le cerveau (nom du service ci-dessus)
       - CPE_BRAIN_HOST=cpe-brain
@@ -106,7 +106,7 @@ services:
     build: ./LLM
     container_name: cpe-brain
     ports:
-      - "8000:8000"
+      - "8001:8001"
     volumes:
       # Vos documents pour le RAG
       - ./LLM/data:/data

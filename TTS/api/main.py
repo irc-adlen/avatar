@@ -15,7 +15,7 @@ from typing import Optional, List, Dict
 # L'adresse de votre Service LLM/RAG (Le "Cerveau" dockerisé)
 # Si vous tournez en local, c'est localhost. Si docker, c'est le nom du service.
 CPE_BRAIN_HOST = os.getenv("CPE_BRAIN_HOST", "localhost")
-CPE_BRAIN_API_URL = f"http://{CPE_BRAIN_HOST}:8000/chat"
+CPE_BRAIN_API_URL = f"http://{CPE_BRAIN_HOST}:8001/chat"
 
 # L'adresse de Moshi (TTS)
 MOSHI_HOST = os.getenv("MOSHI_HOST", "localhost")
@@ -173,4 +173,4 @@ async def chat_endpoint(request: ChatRequest, background_tasks: BackgroundTasks)
 
 if __name__ == "__main__":
     # IMPORTANT : Port 8001 pour ne pas conflire avec le RAG qui est sur 8000
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
