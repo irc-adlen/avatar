@@ -21,6 +21,7 @@ services:
     image: faceapp:latest
     devices:
       - "/dev/video0:/dev/video0"
+      - /dev/snd:/dev/snd
     environment:
       - INSIGHTFACE_PROVIDER=CPUExecutionProvider
     volumes:
