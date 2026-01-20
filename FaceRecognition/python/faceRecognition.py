@@ -216,7 +216,7 @@ def check_camera():
     hash = generate_unique_hash(conversations_collection)
     if name != "Inconnu":
         myobj = {
-            "prompt": f"Dis bonjour à {name}",
+            "prompt": f"[system] Dis bonjour à {name}",
             "voice": "default_voice.wav",
             "session_id": hash
         }
