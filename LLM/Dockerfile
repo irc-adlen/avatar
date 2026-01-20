@@ -15,4 +15,4 @@ COPY app/main.py /app/main.py
 RUN mkdir -p /data /vector_db
 
 # Lancement du serveur
-ENTRYPOINT ["python3", "main.py"]
+ENTRYPOINT ["python3", "/app/main.py"]
