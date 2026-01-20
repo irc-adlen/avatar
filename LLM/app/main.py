@@ -67,13 +67,13 @@ def get_history(session_id, limit=3):
 # ==============================================================================
 logger.info("🧠 [2/3] Chargement vLLM...")
 
-# Configuration : Puisque le TTS est ailleurs, on donne 90% du GPU au LLM
+# Configuration : Puisque le TTS est ailleurs, on donne 50% du GPU au LLM
 llm_engine = LLM(
     model=MODEL_ID,
     tensor_parallel_size=1,      # Utilise vos 2 GPU
     dtype="bfloat16",            # Format rapide
     max_model_len=8192,          # Contexte large
-    gpu_memory_utilization=0.90, # On utilise quasi toute la VRAM dispo
+    gpu_memory_utilization=0.50, # On utilise quasi toute la VRAM dispo
     enforce_eager=True           # Optimisation démarrage
 )
 
