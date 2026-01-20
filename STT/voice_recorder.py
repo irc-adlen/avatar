@@ -6,7 +6,7 @@ import time
 # Audio configuration
 SAMPLE_RATE = 48000
 CHANNELS = 1
-INPUT_DEVICE = 9
+INPUT_DEVICE = 3
 BLOCK_DURATION = 0.1  # seconds
 SILENCE_THRESHOLD = 0.015  # volume threshold
 MAX_SILENCE_DURATION = 1.5  # seconds before stopping
