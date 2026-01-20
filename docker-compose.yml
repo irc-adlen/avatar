@@ -117,6 +117,7 @@ services:
     environment:
       # Connexion à Mongo via le nom du service docker
       - MONGO_URI=mongodb://mongo:27017
+      - MOSHI_HOST=moshi
       # - HUGGING_FACE_HUB_TOKEN=votre_token_huggingface_ici
     deploy:
       resources:
@@ -140,7 +141,7 @@ services:
       - moshi_data:/app/data_moshi # Persistance des modèles
     gpus: all
     environment:
-      - NVIDIA_VISIBLE_DEVICES=1  # Spécifie la carte GPU à utiliser (ajuster selon le système)
+      - NVIDIA_VISIBLE_DEVICES=1 # Spécifie la carte GPU à utiliser (ajuster selon le système)
     networks:
       - moshi_net
 
