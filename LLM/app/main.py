@@ -1,250 +1,176 @@
-import os
-import uvicorn
+import asyncio
 import base64
 import json
+import websockets
+import msgpack
+import uvicorn
+import aiohttp
 import re
-import time
-import torch
-import io
-import logging
-from typing import List, Optional, Dict, Any
-from fastapi import FastAPI
+import os
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
 from pydantic import BaseModel
-from pymongo import MongoClient
-from scipy.io.wavfile import write as write_wav
+from typing import Optional, List, Dict
 
-# --- MODULE IMPORTS ---
-# ROLE: The Brain (Inference Engine)
-from vllm import LLM, SamplingParams
-# ROLE: The Mouth (Text-to-Speech)
-from TTS.api import TTS
-# ROLE: The Knowledge (RAG)
-from langchain_community.document_loaders import PyPDFDirectoryLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_chroma import Chroma
+# === CONFIGURATION ===
+# L'adresse de votre Service LLM/RAG (Le "Cerveau" dockerisé)
+# Si vous tournez en local, c'est localhost. Si docker, c'est le nom du service.
+CPE_BRAIN_HOST = os.getenv("CPE_BRAIN_HOST", "localhost")
+CPE_BRAIN_API_URL = f"http://{CPE_BRAIN_HOST}:8000/chat"
 
-# --- CONFIGURATION ---
-MODEL_ID = "mistralai/Mistral-Nemo-Instruct-2407"
-TTS_MODEL = "tts_models/multilingual/multi-dataset/xtts_v2"
-DATA_PATH = "/data"
-DB_PATH = "/vector_db"
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-VOICE_REF = "default_voice.wav"
+# L'adresse de Moshi (TTS)
+MOSHI_HOST = os.getenv("MOSHI_HOST", "localhost")
+MOSHI_WS_URL = f"ws://{MOSHI_HOST}:8080/api/tts_streaming"
 
-# Logging setup
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("CPE_MONOLITH")
+AUTH_TOKEN = "public_token"
 
-app = FastAPI(title="CPE Vocal Assistant - Monolithic Core")
+app = FastAPI(title="Orchestrateur Vocal (Gateway)")
 
-# ==============================================================================
-# MODULE 1: LONG-TERM MEMORY (MongoDB)
-# ROLE: Stores conversation history and context between sessions.
-# ==============================================================================
-logger.info("💾 [MODULE 1] Connecting to Memory (MongoDB)...")
-try:
-    mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)
-    db = mongo_client["cpe_assistant_db"]
-    chat_collection = db["chat_history"]
-    logger.info("   ✅ Memory Connected.")
-except Exception as e:
-    logger.error(f"   ❌ Memory Error: {e} (Running without persistent memory)")
-    chat_collection = None
+# --- GESTIONNAIRE FLUX AUDIO (Vers le Client Web/App) ---
+# (Code identique à votre version originale)
+class AudioStreamManager:
+    def __init__(self):
+        self.active_connection: WebSocket | None = None
 
-def save_memory(session_id, role, content):
-    if chat_collection is not None:
-        chat_collection.insert_one({
-            "session_id": session_id,
-            "role": role,
-            "content": content,
-            "timestamp": time.time()
-        })
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connection = websocket
+        print(">>> [System] Client Audio Connecté")
 
-def get_memory(session_id, limit=3):
-    if chat_collection is None: return ""
-    msgs = list(chat_collection.find({"session_id": session_id}).sort("timestamp", -1).limit(limit))
-    msgs.reverse()
-    hist = ""
-    for m in msgs:
-        # Filter out system commands from context to avoid confusion
-        if not m['content'].startswith("[system]"):
-            hist += f"<|im_start|>{m['role']}\n{m['content']}<|im_end|>\n"
-    return hist
+    def disconnect(self):
+        self.active_connection = None
+        print(">>> [System] Client Audio Déconnecté")
 
-# ==============================================================================
-# MODULE 2: THE BRAIN (vLLM)
-# ROLE: Generates intelligence, answers questions, and extracts JSON data.
-# ==============================================================================
-logger.info("🧠 [MODULE 2] Loading Brain (vLLM)...")
-# OPTIMIZATION: We restrict vLLM to 50% GPU to leave room for TTS.
-llm_engine = LLM(
-    model=MODEL_ID,
-    tensor_parallel_size=2,       # Uses both GPUs
-    dtype="bfloat16",
-    max_model_len=8192,
-    gpu_memory_utilization=0.5,   # CRITICAL: Only use 50% VRAM
-    enforce_eager=True            # CRITICAL: Disable Graph capture to save RAM
-)
-# Sampling for chat (creative)
-chat_sampling = SamplingParams(temperature=0.7, top_p=0.9, max_tokens=256, stop=["<|im_end|>"])
-# Sampling for data extraction (strict)
-json_sampling = SamplingParams(temperature=0.1, max_tokens=128, stop=["<|im_end|>"])
-logger.info("   ✅ Brain Loaded.")
-
-# ==============================================================================
-# MODULE 3: THE MOUTH (Coqui TTS)
-# ROLE: Converts text responses into audio bytes (WAV).
-# ==============================================================================
-logger.info("🔊 [MODULE 3] Loading Mouth (XTTS v2)...")
-os.environ["COQUI_TOS_AGREED"] = "1"
-# We force TTS onto the first GPU (shared with half of vLLM)
-tts_engine = TTS(model_name=TTS_MODEL).to("cuda:0")
-logger.info("   ✅ Mouth Loaded.")
-
-def generate_speech(text):
-    """Generates audio and returns Base64 string."""
-    # Clean text for better pronunciation (remove markdown)
-    clean_text = re.sub(r'[*_#`]', '', text)
-    wav = tts_engine.tts(text=clean_text, speaker_wav=VOICE_REF, language="fr")
-    
-    bio = io.BytesIO()
-    write_wav(bio, 24000, wav)
-    return base64.b64encode(bio.getvalue()).decode("utf-8")
-
-# ==============================================================================
-# MODULE 4: KNOWLEDGE BASE (RAG / ChromaDB)
-# ROLE: Indexes PDFs and retrieves relevant context.
-# ==============================================================================
-logger.info("📚 [MODULE 4] Loading Knowledge Base (RAG)...")
-embeddings = HuggingFaceEmbeddings(model_name="intfloat/multilingual-e5-large")
-
-if not os.path.exists(os.path.join(DB_PATH, "chroma.sqlite3")):
-    if os.path.exists(DATA_PATH):
-        loader = PyPDFDirectoryLoader(DATA_PATH)
-        docs = loader.load()
-        if docs:
-            splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-            splits = splitter.split_documents(docs)
-            vector_db = Chroma.from_documents(splits, embeddings, persist_directory=DB_PATH)
-            logger.info(f"   ✅ Index Created ({len(splits)} chunks).")
-        else:
-            vector_db = Chroma(embedding_function=embeddings, persist_directory=DB_PATH)
-    else:
-        vector_db = Chroma(embedding_function=embeddings, persist_directory=DB_PATH)
-else:
-    logger.info("   ✅ Existing Index Loaded.")
-    vector_db = Chroma(persist_directory=DB_PATH, embedding_function=embeddings)
-
-# ==============================================================================
-# API LOGIC & ORCHESTRATION
-# ==============================================================================
-
-class UserInput(BaseModel):
-    text: str          # Input text or "[system] command"
-    session_id: str    # Unique session ID
-    user_name: Optional[str] = "Inconnu"
-
-class BotOutput(BaseModel):
-    text: str          # Text response
-    audio: str         # Base64 WAV Audio
-    extra_data: Optional[Dict] = None # Extracted JSON info (if any)
-
-@app.post("/chat", response_model=BotOutput)
-async def main_pipeline(req: UserInput):
-    """
-    Main entry point. Orchestrates Logic -> Memory -> RAG -> LLM -> TTS.
-    """
-    response_text = ""
-    extracted_data = None
-    
-    # --- LOGIC PATH A: SYSTEM COMMANDS (Face Recognition) ---
-    if req.text.startswith("[system]"):
-        
-        # Case A1: Known User -> Welcome
-        if "Dis bonjour à" in req.text:
-            match = re.search(r"Dis bonjour à (.+)", req.text)
-            name = match.group(1) if match else "l'ami"
-            response_text = f"Bonjour {name}, ravi de vous revoir à C P E Lyon. Que puis-je faire pour vous ?"
-            # We don't save system triggers in user history, only the bot response
-            save_memory(req.session_id, "assistant", response_text)
-        
-        # Case A2: Unknown User -> Ask Name
-        elif "Demande le prenom" in req.text:
-            response_text = "Bonjour, je ne vous reconnais pas. Quel est votre prénom ?"
-            save_memory(req.session_id, "assistant", response_text) # Critical for context tracking
-            
-    # --- LOGIC PATH B: USER CONVERSATION ---
-    else:
-        # Save user input
-        save_memory(req.session_id, "user", req.text)
-        
-        # Check Context: Are we waiting for a name?
-        last_bot_msg = None
-        if chat_collection:
-            last_bot_msg = chat_collection.find_one(
-                {"session_id": req.session_id, "role": "assistant"}, 
-                sort=[("timestamp", -1)]
-            )
-        
-        # Case B1: User is answering the name question
-        if last_bot_msg and "Quel est votre prénom" in last_bot_msg.get('content', ''):
-            logger.info("🕵️ DATA EXTRACTION MODE DETECTED")
-            
-            # Use Brain to extract JSON
-            prompt = f"""<s>[INST] Extract info as JSON (name, filiere, age). 
-Text: "{req.text}"
-JSON: [/INST]"""
-            out = llm_engine.generate([prompt], json_sampling)
-            generated = out[0].outputs[0].text.strip()
-            
+    async def broadcast(self, data: dict):
+        if self.active_connection:
             try:
-                # Parse JSON
-                start, end = generated.find('{'), generated.rfind('}') + 1
-                if start != -1:
-                    extracted_data = json.loads(generated[start:end])
-            except: pass
+                await self.active_connection.send_json(data)
+            except Exception:
+                self.disconnect()
 
-            if extracted_data and "name" in extracted_data:
-                response_text = f"Enchanté {extracted_data['name']}. J'ai bien noté vos informations."
-                # HERE: You can add a POST request to your external API
-            else:
-                response_text = "Je n'ai pas bien compris le prénom. Pouvez-vous répéter ?"
+stream_manager = AudioStreamManager()
 
-        # Case B2: Standard RAG Conversation
-        if not response_text:
-            # 1. Retrieve Knowledge
-            docs = vector_db.as_retriever(search_kwargs={"k": 2}).invoke(req.text)
-            context = "\n".join([d.page_content for d in docs])
-            
-            # 2. Retrieve History
-            history = get_memory(req.session_id)
-            
-            # 3. Generate Answer
-            prompt = f"""<|im_start|>system
-Tu es l'assistant de CPE Lyon.
-Réponds oralement, de manière concise (2 phrases max), en français.
-Utilise le contexte suivant :
-{context}<|im_end|>
-{history}
-<|im_start|>user
-{req.text}<|im_end|>
-<|im_start|>assistant
-"""
-            out = llm_engine.generate([prompt], chat_sampling)
-            response_text = out[0].outputs[0].text.strip()
-            
-            save_memory(req.session_id, "assistant", response_text)
+# Modèle mis à jour pour correspondre à votre nouveau système
+class ChatRequest(BaseModel):
+    prompt: str          # Texte utilisateur OU commande [system]
+    voice: Optional[str] = "default_voice.wav"
+    session_id: Optional[str] = "default"
+    user_name: Optional[str] = "Inconnu" # Ajout utile pour la logique de bienvenue
 
-    # --- FINAL STEP: GENERATE AUDIO ---
-    # Convert the final text to audio
-    audio_b64 = generate_speech(response_text)
+# --- LOGIQUE PRINCIPALE ---
+async def process_conversation(request: ChatRequest):
+    from urllib.parse import urlencode
     
-    return {
-        "text": response_text,
-        "audio": audio_b64,
-        "extra_data": extracted_data
-    }
+    # 1. Configuration Moshi (TTS)
+    params = {"voice": request.voice, "format": "PcmMessagePack", "auth_id": AUTH_TOKEN}
+    uri = f"{MOSHI_WS_URL}?{urlencode(params)}"
+    
+    try:
+        # On ouvre la connexion vers le TTS (Moshi)
+        async with websockets.connect(uri, additional_headers={"kyutai-api-key": AUTH_TOKEN}) as moshi_ws:
+            print(f">>> [Job] Input: '{request.prompt[:30]}...' | Session: {request.session_id}")
+            stop_event = asyncio.Event()
+
+            # --- TÂCHE A : Récupérer la réponse du Cerveau (LLM + RAG) ---
+            async def task_brain_producer():
+                async with aiohttp.ClientSession() as session:
+                    # Payload formaté pour votre nouveau service vLLM
+                    payload = {
+                        "text": request.prompt,
+                        "session_id": request.session_id,
+                        "user_name": request.user_name
+                    }
+
+                    try:
+                        print(f">>> [LLM] Envoi requête vers {CPE_BRAIN_API_URL}...")
+                        
+                        # Appel POST simple (pas de streaming HTTP ici, le cerveau est rapide)
+                        async with session.post(CPE_BRAIN_API_URL, json=payload) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                
+                                # Le cerveau renvoie tout le texte d'un coup dans "prompt"
+                                # Il a déjà géré la mémoire et le RAG en interne.
+                                full_text = data.get("prompt", "")
+                                print(f">>> [LLM] Réponse reçue : {full_text[:50]}...")
+
+                                # ASTUCE : On découpe le texte en phrases pour l'envoyer petit à petit à Moshi
+                                # Cela simule le streaming et permet au TTS de commencer vite.
+                                sentences = re.split(r'(?<=[.!?]) +', full_text)
+                                
+                                for sentence in sentences:
+                                    if sentence.strip() and not stop_event.is_set():
+                                        # Envoi du texte à Moshi
+                                        await moshi_ws.send(msgpack.packb({"type": "Text", "text": sentence}))
+                                        # Petite pause technique pour fluidifier le buffer TTS
+                                        await asyncio.sleep(0.05)
+                                
+                                # Signal de fin pour Moshi une fois tout le texte envoyé
+                                if not stop_event.is_set():
+                                    await moshi_ws.send(msgpack.packb({"type": "Eos"}))
+                            else:
+                                error_txt = await resp.text()
+                                print(f"!!! Erreur Cerveau ({resp.status}): {error_txt}")
+
+                    except Exception as e:
+                        print(f"!!! Erreur Connexion LLM: {e}")
+                        await stream_manager.broadcast({"type": "error", "message": str(e)})
+
+            # --- TÂCHE B : Recevoir l'Audio de Moshi et l'envoyer au Client ---
+            async def task_moshi_consumer():
+                try:
+                    async for message in moshi_ws:
+                        data = msgpack.unpackb(message, raw=False)
+                        msg_type = data.get("type")
+                        
+                        if msg_type == "Audio":
+                            # Conversion PCM -> Base64 pour le client Web
+                            import struct
+                            pcm_bytes = struct.pack(f'{len(data["pcm"])}f', *data["pcm"])
+                            b64 = base64.b64encode(pcm_bytes).decode("utf-8")
+                            
+                            # Envoi au Frontend
+                            await stream_manager.broadcast({
+                                "type": "audio",
+                                "data": b64,
+                                "sample_rate": 24000 # Standard Moshi
+                            })
+                        # On ignore les métadonnées pour alléger
+                            
+                except websockets.ConnectionClosed:
+                    pass
+                except Exception as e:
+                    print(f"!!! Moshi Error: {e}")
+                finally:
+                    stop_event.set()
+
+            # Lancement parallèle des tâches
+            t1 = asyncio.create_task(task_brain_producer())
+            t2 = asyncio.create_task(task_moshi_consumer())
+            
+            # On attend que le consommateur (Audio) ait fini de tout recevoir
+            await t2
+            if not t1.done(): t1.cancel()
+
+    except Exception as e:
+        print(f"!!! Global Error: {e}")
+
+# --- ENDPOINTS ---
+@app.websocket("/stream/audio")
+async def audio_stream_endpoint(websocket: WebSocket):
+    await stream_manager.connect(websocket)
+    try:
+        while True: await websocket.receive_text()
+    except WebSocketDisconnect: stream_manager.disconnect()
+
+@app.post("/chat")
+async def chat_endpoint(request: ChatRequest, background_tasks: BackgroundTasks):
+    # On délègue le traitement en tâche de fond pour ne pas bloquer la requête HTTP
+    background_tasks.add_task(
+        process_conversation, 
+        request 
+    )
+    return {"status": "processing_started"}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # IMPORTANT : Port 8001 pour ne pas conflire avec le RAG qui est sur 8000
+    uvicorn.run(app, host="0.0.0.0", port=8001)

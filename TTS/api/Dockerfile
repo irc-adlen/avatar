@@ -1,19 +1,18 @@
-FROM python:3.10-slim
+# Image optimisée pour NVIDIA
+FROM vllm/vllm-openai:latest
 
-# Libs pour l'audio
-RUN apt-get update && apt-get install -y \
-    libasound2 \
-    libportaudio2 \
-    && rm -rf /var/lib/apt/lists/*
+# Installation des dépendances pour la Logique, la Mémoire et le RAG
+RUN pip install --no-cache-dir \
+    fastapi uvicorn pydantic requests pymongo \
+    langchain langchain-community langchain-huggingface langchain-chroma chromadb pypdf sentence-transformers \
+    einops
 
+# Configuration du dossier de travail
 WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY main.py /app/main.py
 
-# On copie le script de l'agent
-COPY api_agent.py .
+# Création des dossiers pour les PDF et la Base Vectorielle
+RUN mkdir -p /data /vector_db
 
-# Port
-EXPOSE 8080
-
-CMD ["python", "api_agent.py"]
+# Lancement du serveur
+ENTRYPOINT ["python3", "main.py"]

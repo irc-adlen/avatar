@@ -1,81 +1,82 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  mongo:
-    image: mongo:latest
-    container_name: moshi_mongo
-    restart: always
-    volumes:
-      - mongo_data:/data/db # Persistance des données sur le disque
-    networks:
-      - moshi_net
-
-  # --- Service 1 : LLM (Ollama) ---
-  ollama:
-    image: ollama/ollama:latest
-    container_name: moshi_ollama
-    gpus: all
-    volumes:
-      - ollama_data:/root/.ollama
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    networks:
-      - moshi_net
-    # Commande pour pré-charger le modèle au démarrage (optionnel mais pratique)
-    entrypoint: ["/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull qwen2.5:32b && wait"]
-
-  # --- Service 2 : TTS (Moshi) ---
-  moshi:
-    build: ./moshi
-    container_name: moshi_server
-    volumes:
-      - moshi_data:/app/data_moshi  # Persistance des modèles
-    gpus: all
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    networks:
-      - moshi_net
-
-  # --- Service 3 : Agent (Client Python) ---
-  agent:
+  # ==========================================
+  # SERVICE 1 : LE CERVEAU (Intelligence / GPU)
+  # ==========================================
+  cpe-brain:
     build: ./api
-    container_name: moshi_agent
-    depends_on:
-      - moshi
-      - ollama
-    environment:
-      - DISPLAY=${DISPLAY}
-      - PULSE_SERVER=unix:${XDG_RUNTIME_DIR}/pulse/native
-      - MOSHI_HOST=moshi
-      - OLLAMA_HOST=ollama
-      - MONGO_HOST=mongo
-    volumes:
-      # Montage pour l'audio (PulseAudio)
-      - ${XDG_RUNTIME_DIR}/pulse/native:${XDG_RUNTIME_DIR}/pulse/native
-      - ~/.config/pulse/cookie:/root/.config/pulse/cookie
-    devices:
-      - /dev/snd:/dev/snd  # Accès direct à la carte son (alternative à Pulse)
-    networks:
-      - moshi_net
-    stdin_open: true # Pour pouvoir taper dans le terminal
-    tty: true
+    container_name: cpe-brain
     ports:
       - "8000:8000"
+    volumes:
+      # Vos documents pour le RAG
+      - ../LLM/data:/data
+      # La persistance de l'index vectoriel (pour ne pas réindexer à chaque fois)
+      - ../LLM/vector_db:/vector_db
+      # Cache HuggingFace pour ne pas retélécharger le modèle Mistral à chaque reboot
+      - hf_cache:/root/.cache/huggingface
+    environment:
+      # Connexion à Mongo via le nom du service docker
+      - MONGO_URI=mongodb://mongo_db:27017
+      # - HUGGING_FACE_HUB_TOKEN=votre_token_huggingface_ici
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all # Utilise les 2 GPUs
+              capabilities: [gpu]
+    # Important pour vLLM en multi-GPU (mémoire partagée)
+    ipc: host
+    depends_on:
+      - mongo_db
+    networks:
+      - cpe-network
 
+  # ==========================================
+  # SERVICE 2 : L'ORCHESTRATEUR (Gateway / CPU)
+  # ==========================================
+  orchestrator:
+    build: ../LLM/app
+    container_name: cpe-orchestrator
+    ports:
+      - "8001:8001"
+    environment:
+      # Indique où trouver le cerveau (nom du service ci-dessus)
+      - CPE_BRAIN_HOST=cpe-brain
+
+      # Indique où trouver Moshi (host.docker.internal = votre machine physique)
+      # Si Moshi est un autre conteneur, mettez son nom ici.
+      - MOSHI_HOST=host.docker.internal
+    extra_hosts:
+      # Permet au conteneur de voir le localhost de votre machine Ubuntu
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - cpe-brain
+    networks:
+      - cpe-network
+
+  # ==========================================
+  # SERVICE 3 : MÉMOIRE (MongoDB)
+  # ==========================================
+  mongo_db:
+    image: mongo:latest
+    container_name: cpe-mongo
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017" # Accessible aussi depuis votre PC pour débugger
+    networks:
+      - cpe-network
+
+# ==========================================
+# VOLUMES & RÉSEAUX
+# ==========================================
 volumes:
-  ollama_data:
-  moshi_data:
-  mongo_data:
+  hf_cache: # Cache des modèles IA
+  mongo_data: # Persistance des conversations
 
 networks:
-  moshi_net:
+  cpe-network:
+    driver: bridge

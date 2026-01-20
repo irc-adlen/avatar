@@ -6,10 +6,10 @@ This project implements a **Split Architecture** for a low-latency, offline voic
 
 ### The Stack
 
-* **`moshi_server` (GPU)**: Kyutai Neural TTS engine. Stream audio via WebSocket.
-* **`moshi_ollama` (GPU)**: Qwen 2.5 LLM. Handles intelligence and reasoning.
-* **`moshi_mongo` (CPU)**: MongoDB Database. Persists conversation history (Memory).
-* **`moshi_agent` (CPU)**: Python FastAPI Controller. Orchestrates the flow between User, Memory, LLM, and TTS.
+- **`moshi_server` (GPU)**: Kyutai Neural TTS engine. Stream audio via WebSocket.
+- **`moshi_ollama` (GPU)**: Qwen 2.5 LLM. Handles intelligence and reasoning.
+- **`moshi_mongo` (CPU)**: MongoDB Database. Persists conversation history (Memory).
+- **`moshi_agent` (CPU)**: Python FastAPI Controller. Orchestrates the flow between User, Memory, LLM, and TTS.
 
 ---
 
@@ -17,16 +17,14 @@ This project implements a **Split Architecture** for a low-latency, offline voic
 
 **Hardware:**
 
-* **GPU:** NVIDIA RTX 3090 (or equivalent) with 24GB+ VRAM.
-* **OS:** Linux (Ubuntu 22.04+ recommended).
+- **GPU:** NVIDIA RTX 3090 (or equivalent) with 24GB+ VRAM.
+- **OS:** Linux (Ubuntu 22.04+ recommended).
 
 **Software:**
 
-* **Docker Engine** & **Docker Compose**.
-* **NVIDIA Container Toolkit**: Mandatory for GPU passthrough.
-* *Verification:* `docker run --rm --gpus all nvidia/cuda:11.0.3-base-ubuntu20.04 nvidia-smi`
-
-
+- **Docker Engine** & **Docker Compose**.
+- **NVIDIA Container Toolkit**: Mandatory for GPU passthrough.
+- _Verification:_ `docker run --rm --gpus all nvidia/cuda:11.0.3-base-ubuntu20.04 nvidia-smi`
 
 ---
 
@@ -38,7 +36,7 @@ Ensure your project directory matches this structure **exactly** to avoid volume
 cpe-assistant/
 ├── docker-compose.yml
 ├── client_test.py           # Local audio listener script
-├── agent/
+├── api/
 │   ├── Dockerfile
 │   ├── requirements.txt     # Must include: pymongo, websockets, fastapi, uvicorn...
 │   └── api_agent.py         # The main Python orchestrator
@@ -82,7 +80,7 @@ sudo docker compose up --build -d
 
 ```
 
-*Note: The first run will take time as it downloads the ~10GB Moshi model and the Ollama model.*
+_Note: The first run will take time as it downloads the ~10GB Moshi model and the Ollama model._
 
 ### Step 2: Health Check
 
@@ -95,10 +93,10 @@ sudo docker compose logs -f
 
 **Success Indicators:**
 
-* `moshi_server`: `Listening on http://0.0.0.0:8080`
-* `moshi_ollama`: `Listening on [::]:11434`
-* `moshi_mongo`: `Waiting for connections on port 27017`
-* `moshi_agent`: `Uvicorn running on http://0.0.0.0:8000`
+- `moshi_server`: `Listening on http://0.0.0.0:8080`
+- `moshi_ollama`: `Listening on [::]:11434`
+- `moshi_mongo`: `Waiting for connections on port 27017`
+- `moshi_agent`: `Uvicorn running on http://0.0.0.0:8000`
 
 ---
 
@@ -119,7 +117,7 @@ python moshi/test_listener.py
 
 ```
 
-*Output: `✅ Connected! Waiting for audio...*`
+_Output: `✅ Connected! Waiting for audio..._`
 
 ### Terminal 2: The Chat Trigger
 
@@ -137,30 +135,30 @@ curl -X POST "http://localhost:8000/chat" \
 
 ```
 
-*Result: You should hear audio in Terminal 1.*
+_Result: You should hear audio in Terminal 1._
 
 **Test 2: Memory Persistence (MongoDB)**
 
 1. **Feed info:** `curl ... -d '{"prompt": "My name is Alex.", "session_id": "user_alex"}'`
 2. **Restart Stack:** `sudo docker compose restart agent`
 3. **Ask info:** `curl ... -d '{"prompt": "What is my name?", "session_id": "user_alex"}'`
-*Result: The AI should reply "Your name is Alex."*
+   _Result: The AI should reply "Your name is Alex."_
 
 ---
 
 ## 7. Troubleshooting
 
-| Symptom | Probable Cause | Solution |
-| --- | --- | --- |
-| **Connection Refused (Port 8080)** | Moshi crashed or is booting. | Check logs (`docker logs moshi_server`). Ensure `--workers 1` is set. |
-| **Audio plays too fast/static** | Sample rate mismatch. | Ensure `client_test.py` expects **24000Hz** Raw PCM Float32. |
-| **Memory not working** | MongoDB connection failed. | Check `docker logs moshi_agent`. Ensure `pymongo` is in `requirements.txt`. |
-| **Ollama "Model not found"** | Model wasn't pulled. | Run `sudo docker exec -it moshi_ollama ollama pull qwen2.5:32b`. |
+| Symptom                            | Probable Cause               | Solution                                                                    |
+| ---------------------------------- | ---------------------------- | --------------------------------------------------------------------------- |
+| **Connection Refused (Port 8080)** | Moshi crashed or is booting. | Check logs (`docker logs moshi_server`). Ensure `--workers 1` is set.       |
+| **Audio plays too fast/static**    | Sample rate mismatch.        | Ensure `client_test.py` expects **24000Hz** Raw PCM Float32.                |
+| **Memory not working**             | MongoDB connection failed.   | Check `docker logs moshi_agent`. Ensure `pymongo` is in `requirements.txt`. |
+| **Ollama "Model not found"**       | Model wasn't pulled.         | Run `sudo docker exec -it moshi_ollama ollama pull qwen2.5:32b`.            |
 
 ---
 
 ## 8. Management Commands
 
-* **Stop everything:** `sudo docker compose down`
-* **Rebuild only the Python Agent:** `sudo docker compose up --build -d agent`
-* **View live logs:** `sudo docker compose logs -f --tail=100`
+- **Stop everything:** `sudo docker compose down`
+- **Rebuild only the Python Agent:** `sudo docker compose up --build -d agent`
+- **View live logs:** `sudo docker compose logs -f --tail=100`

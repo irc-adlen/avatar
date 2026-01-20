@@ -1,28 +1,20 @@
-# Image vLLM officielle
 FROM vllm/vllm-openai:latest
 
-# Installation des dépendances
+# INSTALLATION OF ALL MODULES (Brain, Mouth, Memory, RAG)
 RUN pip install --no-cache-dir \
-    langchain \
-    langchain-community \
-    langchain-huggingface \
-    langchain-chroma \
-    chromadb \
-    pypdf \
-    sentence-transformers \
-    fastapi \
-    uvicorn \
-    pydantic \
-    einops
+    fastapi uvicorn pydantic requests \
+    pymongo \
+    TTS \
+    langchain langchain-community langchain-huggingface langchain-chroma chromadb pypdf sentence-transformers \
+    scipy
 
-# Copie du code
 WORKDIR /app
-COPY app /app
+COPY main.py /app/main.py
+# Copy your voice reference file for cloning
+COPY default_voice.wav /app/default_voice.wav 
 
-# Exposition du port
-EXPOSE 8000
+# Create data directories
+RUN mkdir -p /data /vector_db
 
-# --- CORRECTION CRUCIALE ICI ---
-# On écrase l'ENTRYPOINT par défaut de l'image vLLM
-# Cela permet d'exécuter notre script au lieu du serveur vLLM standard
+# Run the Monolith
 ENTRYPOINT ["python3", "main.py"]
