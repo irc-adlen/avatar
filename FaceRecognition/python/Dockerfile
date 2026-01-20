@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy application and faces directory into the image
 COPY faceRecognition.py /app/faceRecognition.py
-COPY readWebSocket.py /app/readWebSocket.py
+
 COPY faces /app/faces
 COPY start.sh /app/start.sh
 
