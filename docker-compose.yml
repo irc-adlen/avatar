@@ -25,6 +25,8 @@ services:
       - moshi_net
     ports:
       - "5006:5006"
+    depends_on:
+      - agent
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -47,6 +49,7 @@ services:
       - "audio"
     gpus: all
     restart: unless-stopped
+
   mongo:
     image: mongo:latest
     container_name: moshi_mongo

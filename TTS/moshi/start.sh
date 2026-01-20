@@ -3,6 +3,10 @@ set -e
 
 echo ">>> Démarrage du conteneur Moshi..."
 
+# 0. Test de l'environnement CUDA
+echo ">>> Test de l'environnement CUDA avec PyTorch..."
+python3 /app/test.py
+
 # 1. Téléchargement du Modèle si absent
 if [ ! -f "/app/data_moshi/model/config.json" ]; then
     echo ">>> Modèle non trouvé. Téléchargement de kyutai/tts-1.6b-en_fr..."
@@ -18,7 +22,6 @@ if [ ! -f "/app/data_moshi/voices/default_voice.wav" ]; then
 else
     echo ">>> Voix par défaut détectée."
 fi
-
 # 3. Lancement du serveur
 echo ">>> Lancement de moshi-server..."
 exec moshi-server worker --config /app/config.toml
