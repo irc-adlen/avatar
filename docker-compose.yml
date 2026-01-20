@@ -83,7 +83,7 @@ services:
 
       # Indique où trouver Moshi (host.docker.internal = votre machine physique)
       # Si Moshi est un autre conteneur, mettez son nom ici.
-      - MOSHI_HOST=host.docker.internal
+      - MOSHI_HOST=moshi
     extra_hosts:
       # Permet au conteneur de voir le localhost de votre machine Ubuntu
       - "host.docker.internal:host-gateway"
