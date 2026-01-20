@@ -153,7 +153,7 @@ async def brain_endpoint(req: BrainRequest):
         
         # B1. Vérification du contexte (Est-ce une réponse à "Quel est ton nom ?")
         last_bot = None
-        if chat_collection:
+        if chat_collection is not None:
             last_bot = chat_collection.find_one(
                 {"session_id": req.session_id, "role": "assistant"}, 
                 sort=[("timestamp", -1)]
@@ -220,4 +220,5 @@ Utilise le contexte suivant si pertinent :
 
 if __name__ == "__main__":
     # Ce service écoute sur le port 8000
+    print("Démarrage du CPE Brain sur le port 8001...")
     uvicorn.run(app, host="0.0.0.0", port=8001)

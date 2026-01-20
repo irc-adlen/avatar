@@ -9,10 +9,10 @@ RUN pip install --no-cache-dir \
 
 # Configuration du dossier de travail
 WORKDIR /app
-COPY /app/main.py /app/main.py
+COPY app/main.py /app/main.py
 
 # Création des dossiers pour les PDF et la Base Vectorielle
 RUN mkdir -p /data /vector_db
 
 # Lancement du serveur
-ENTRYPOINT ["python3", "main.py"]
+ENTRYPOINT ["python3", "/app/main.py"]
