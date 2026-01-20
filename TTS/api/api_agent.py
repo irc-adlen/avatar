@@ -125,6 +125,7 @@ async def process_conversation(prompt: str, voice: str, system_instruction: str,
     try:
         # On se connecte à Moshi
         async with websockets.connect(uri, additional_headers={"kyutai-api-key": AUTH_TOKEN}) as moshi_ws:
+         
             print(f">>> [Job] Prompt: '{prompt[:30]}...' | Session: {session_id}")
             stop_event = asyncio.Event()
 

@@ -100,30 +100,30 @@ async def moshi_tts_client(text_queue, voice_file):
     except Exception as e:
         print(f"\nERREUR DE CONNEXION : Impossible de charger la voix '{voice_file}'. Vérifiez le nom du fichier.\nErreur: {e}")
 
-def ollama_producer(prompt, text_queue, loop):
-    """Génère le texte via Ollama."""
-    system_instruction = "Tu es un assistant vocal français. Réponds impérativement en langue française, de manière concise et naturelle."
-    full_prompt = f"{system_instruction}\nUtilisateur: {prompt}"
+# def ollama_producer(prompt, text_queue, loop):
+#     """Génère le texte via Ollama."""
+#     system_instruction = "Tu es un assistant vocal français. Réponds impérativement en langue française, de manière concise et naturelle."
+#     full_prompt = f"{system_instruction}\nUtilisateur: {prompt}"
 
-    process = subprocess.Popen(
-        ["ollama", "run", OLLAMA_MODEL, full_prompt],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        text=True, bufsize=1, encoding='utf-8'
-    )
-    buffer = ""
-    while True:
-        char = process.stdout.read(1)
-        if not char and process.poll() is not None: break
-        if char:
-            sys.stdout.write(char)
-            sys.stdout.flush()
-            buffer += char
-            if char in [' ', '\n', '.', ',', '!', '?', ';', ':']:
-                if buffer:
-                    asyncio.run_coroutine_threadsafe(text_queue.put(buffer), loop)
-                    buffer = ""
-    if buffer: asyncio.run_coroutine_threadsafe(text_queue.put(buffer), loop)
-    asyncio.run_coroutine_threadsafe(text_queue.put(None), loop)
+#     process = subprocess.Popen(
+#         ["ollama", "run", OLLAMA_MODEL, full_prompt],
+#         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+#         text=True, bufsize=1, encoding='utf-8'
+#     )
+#     buffer = ""
+#     while True:
+#         char = process.stdout.read(1)
+#         if not char and process.poll() is not None: break
+#         if char:
+#             sys.stdout.write(char)
+#             sys.stdout.flush()
+#             buffer += char
+#             if char in [' ', '\n', '.', ',', '!', '?', ';', ':']:
+#                 if buffer:
+#                     asyncio.run_coroutine_threadsafe(text_queue.put(buffer), loop)
+#                     buffer = ""
+#     if buffer: asyncio.run_coroutine_threadsafe(text_queue.put(buffer), loop)
+#     asyncio.run_coroutine_threadsafe(text_queue.put(None), loop)
 
 def parse_emotion(user_input):
     """Détecte [EMOTION] au début du texte."""
