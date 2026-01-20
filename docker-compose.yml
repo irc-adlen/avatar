@@ -68,7 +68,9 @@ services:
   # LLM : ORCHESTRATEUR (Gateway / CPU)
   # ==========================================
   orchestrator:
-    build: ./TTS/api
+    build: 
+      context: ./TTS/api
+      dockerfile: ./Dockerfile
     image: cpe-orchestrator:latest
     container_name: cpe-orchestrator
     ports:
@@ -97,7 +99,9 @@ services:
   # LLM : CERVEAU (Intelligence / GPU)
   # ==========================================
   cpe-brain:
-    build: ./LLM
+    build:
+      context: ./LLM
+      dockerfile: ./Dockerfile
     container_name: cpe-brain
     ports:
       - "8001:8000"
@@ -127,7 +131,9 @@ services:
 
   # --- TTS (Moshi) ---
   moshi:
-    build: ./TTS/moshi
+    build: 
+      context: ./TTS/moshi
+      dockerfile: ./Dockerfile
     container_name: moshi_server
     volumes:
       - moshi_data:/app/data_moshi # Persistance des modèles
