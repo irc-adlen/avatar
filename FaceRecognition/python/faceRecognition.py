@@ -8,6 +8,7 @@ import requests
 from pymongo import MongoClient
 from dotenv import load_dotenv, find_dotenv
 import secrets
+import shutil
 
 flaskApp = Flask(__name__)
 # ---------------- MongoDB ----------------
@@ -178,19 +179,30 @@ def start_video_capture():
     cap.release()
     return best_name_size
 
-def capture_image(path):
-    # Changer ça pour prendre la dernière image save dans NEW_USER_FILE.
-    # Et l'enregister dans la base.
-    cap = cv2.VideoCapture(0)
-    # Read one frame from the camera
-    ret, frame = cap.read()
-    if not ret:
-        print("Failed to capture image")
-        cap.release()
-        exit(1)
-
-    # Save the captured frame as an image file
-    cv2.imwrite(path, frame)
+def capture_image(path, name):
+    """Copy image from NEW_USER_FILE to path and add user to MongoDB."""
+    try:
+        # Copy image file
+        shutil.copy(NEW_USER_FILE, path)
+        
+        # Add user to MongoDB with upsert
+        people_collection.update_one(
+            {"name": name},
+            {
+                "$setOnInsert": {
+                    "name": name,
+                    "promo": "Unknown",
+                    "image_path": path,
+                    "last_seen": None
+                }
+            },
+            upsert=True
+        )
+        print(f"User {name} saved and added to MongoDB")
+        
+    except Exception as e:
+        print(f"Error saving image: {e}")
+    
 
 @flaskApp.route('/check_camera', methods=['GET'])
 def check_camera():
@@ -210,7 +222,7 @@ def check_camera():
         }
     else:
         myobj = {
-            "prompt": "Demande le prenom de la personne",
+            "prompt": "[system] Demande le prenom de la personne",
             "voice": "default_voice.wav",
             "session_id": hash
         }
@@ -228,8 +240,10 @@ def save_image():
 
     # Parse JSON body
     data = request.get_json()
-
-    capture_image(data["path"]) # à changer (je ne sais pas encore ce que va être le nom du champ)
+    name = data.get("name")
+    if not name:
+        return jsonify({"error": "Missing 'name' field"}), 400
+    capture_image(f"faces/{name}.jpg", name)
     return Response(status=200)
 
 @flaskApp.route('/reset', methods=['GET'])
