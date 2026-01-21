@@ -2,11 +2,12 @@ import sounddevice as sd
 import numpy as np
 from scipy.io.wavfile import write
 import time
+import os
 
 # Audio configuration
 SAMPLE_RATE = 48000
 CHANNELS = 1
-INPUT_DEVICE = 3
+INPUT_DEVICE = int(os.getenv("INPUT_DEVICE", "3"))
 BLOCK_DURATION = 0.1  # seconds
 SILENCE_THRESHOLD = 0.015  # volume threshold
 MAX_SILENCE_DURATION = 1.5  # seconds before stopping
