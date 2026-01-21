@@ -48,6 +48,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./records:/app/records
       - ./cacheHuggingFace:/root/.cache/huggingface
+    environment:
+      INPUT_DEVICE: 3
     devices:
       - /dev/snd:/dev/snd
     group_add:
