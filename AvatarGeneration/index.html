@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modular Avatar Creator - Auto-Mapping Version</title>
+    <style>
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; display: flex; height: 100vh; background: #1a1a1a; color: white; overflow: hidden; }
+        #library { width: 280px; border-right: 1px solid #333; display: flex; flex-direction: column; background: #252525; }
+        #main-container { flex-grow: 1; display: flex; flex-direction: column; }
+        #viewer { flex-grow: 1; position: relative; min-height: 0; }
+        #api-panel { height: 160px; background: #222; border-top: 1px solid #444; padding: 15px; display: flex; align-items: center; gap: 20px; }
+        #sidebar { width: 300px; border-left: 1px solid #333; display: flex; flex-direction: column; background: #252525; }
+        .header { padding: 15px; background: #333; border-bottom: 1px solid #444; }
+        #list, #lib-list { overflow-y: auto; flex-grow: 1; padding: 10px; }
+        .mesh-item, .lib-item { padding: 12px; margin-bottom: 8px; border-radius: 6px; font-size: 12px; cursor: pointer; background: #3d3d3d; border: 1px solid #555; transition: 0.2s; }
+        .mesh-item:hover, .lib-item:hover { background: #4d4d4d; border-color: #007bff; }
+        .selected { border-color: #007bff; background: #2c3e50; }
+        .tag-display { display: block; color: #00bcff; font-size: 10px; font-weight: bold; margin-top: 4px; text-transform: uppercase; }
+        .controls { padding: 15px; background: #333; display: flex; flex-direction: column; gap: 8px; }
+        button { padding: 10px; cursor: pointer; background: #27ae60; color: white; border: none; border-radius: 4px; font-weight: bold; }
+        button.secondary { background: #34495e; }
+        button.api-btn { background: #8e44ad; }
+        button:disabled { background: #555 !important; opacity: 0.5; }
+        .preview-img { width: 80px; height: 80px; border: 2px dashed #555; border-radius: 4px; object-fit: cover; }
+        pre#apiFeatures { font-size: 10px; color: #00bcff; background: #111; padding: 8px; border-radius: 4px; height: 80px; overflow: auto; margin: 0; flex-grow: 1; white-space: pre-wrap; border: 1px solid #444; }
+    </style>
+</head>
+<body>
+
+    <div id="library">
+        <div class="header">
+            <h4>Bibliothèque</h4>
+            <button class="secondary" id="importLib" style="width:100%">Importer Bibliothèque JSON</button>
+        </div>
+        <div id="lib-list"></div>
+        <div class="controls"><button class="secondary" id="exportLib">Exporter (.json)</button></div>
+    </div>
+
+    <div id="main-container">
+        <div id="viewer"></div>
+        <div id="api-panel">
+            <div style="display:flex; flex-direction:column; gap:5px;">
+                <input type="file" id="apiImageInput" accept="image/*" style="display:none">
+                <button class="secondary" onclick="document.getElementById('apiImageInput').click()">📷 Image</button>
+            </div>
+            <img id="imagePreview" class="preview-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <button class="api-btn" id="sendToApi" disabled>🚀 Analyser</button>
+                <p id="apiStatus" style="font-size:10px; color:#aaa; margin:0; text-align:center;">Prêt</p>
+            </div>
+            <pre id="apiFeatures">Résultats IA...</pre>
+            <button class="api-btn" id="start_auto_apply" disabled>Auto-Appliquer</button>
+        </div>
+    </div>
+
+    <div id="sidebar">
+        <div class="header"><h4>Avatar Base</h4><input type="file" id="fileInput" accept=".glb"></div>
+        <div id="list"></div>
+        <div class="controls">
+            <input type="text" id="tagInput" placeholder="TAG (ex: GLASSES_YES)">
+            <button id="extractBtn" disabled>Extraire Mesh</button>
+        </div>
+    </div>
+    <input type="file" id="jsonInput" style="display:none" accept=".json">
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        let scene, camera, renderer, controls, currentModel, selectedObject;
+        let library = [];
+        let mapping = [];
+
+        function init() {
+            const viewerEl = document.getElementById('viewer');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a1a);
+            
+            camera = new THREE.PerspectiveCamera(45, viewerEl.clientWidth / viewerEl.clientHeight, 0.1, 1000);
+            camera.position.set(0, 1.5, 2.5);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(viewerEl.clientWidth, viewerEl.clientHeight);
+            renderer.outputColorSpace = THREE.SRGBColorSpace; 
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            
+            viewerEl.appendChild(renderer.domElement);
+            scene.add(new THREE.AmbientLight(0xffffff, 2.5));
+            const light = new THREE.DirectionalLight(0xffffff, 1.5);
+            light.position.set(2, 2, 5);
+            scene.add(light);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 1.2, 0);
+
+            window.addEventListener('resize', () => {
+                camera.aspect = viewerEl.clientWidth / viewerEl.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(viewerEl.clientWidth, viewerEl.clientHeight);
+            });
+            animate();
+        }
+
+        function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+        init();
+
+        // --- CHARGEMENT DU MODÈLE BASE ---
+        document.getElementById('fileInput').onchange = (e) => {
+            new GLTFLoader().load(URL.createObjectURL(e.target.files[0]), (gltf) => {
+                if (currentModel) scene.remove(currentModel);
+                currentModel = gltf.scene;
+                scene.add(currentModel);
+                refreshList();
+            });
+        };
+
+        function refreshList() {
+            const list = document.getElementById('list'); list.innerHTML = "";
+            currentModel.traverse(child => {
+                if (child.isMesh) {
+                    const item = document.createElement('div');
+                    item.className = 'mesh-item'; item.innerText = child.name;
+                    item.onclick = () => {
+                        selectedObject = child;
+                        document.querySelectorAll('.mesh-item').forEach(el => el.classList.remove('selected'));
+                        item.classList.add('selected');
+                        document.getElementById('extractBtn').disabled = false;
+                        highlight(child);
+                    };
+                    list.appendChild(item);
+                }
+            });
+        }
+
+        function highlight(obj) {
+            currentModel.traverse(c => { if(c.material && c.material.emissive) c.material.emissive.setHex(0x000000); });
+            if(obj.material && obj.material.emissive) obj.material.emissive.setHex(0x222222);
+        }
+
+        // --- BIBLIOTHÈQUE ---
+        document.getElementById('extractBtn').onclick = () => {
+            library.push({
+                name: selectedObject.name,
+                tag: document.getElementById('tagInput').value.toUpperCase() || "SANS_TAG",
+                geometry: selectedObject.geometry.clone(),
+                material: selectedObject.material.clone()
+            });
+            updateLibraryUI();
+            document.getElementById('tagInput').value = "";
+        };
+
+        function updateLibraryUI() {
+            const libList = document.getElementById('lib-list'); libList.innerHTML = "";
+            library.forEach((item) => {
+                const div = document.createElement('div');
+                div.className = 'lib-item';
+                div.innerHTML = `<strong>${item.name}</strong><span class="tag-display"># ${item.tag}</span>`;
+                div.onclick = () => applyToModel(item);
+                libList.appendChild(div);
+            });
+        }
+
+        function applyToModel(item) {
+            if (!currentModel) return;
+            currentModel.traverse(child => {
+                if (child.isMesh && child.name === item.name) {
+                    child.geometry = item.geometry;
+                    child.material = item.material;
+                    if (child.material.map) {
+                        child.material.map.flipY = false;
+                        child.material.map.colorSpace = THREE.SRGBColorSpace;
+                        child.material.map.needsUpdate = true;
+                    }
+                    child.material.needsUpdate = true;
+                }
+            });
+        }
+
+        // --- IMPORT / EXPORT ---
+        document.getElementById('exportLib').onclick = () => {
+            const items = library.map(item => {
+                const matJSON = item.material.toJSON();
+                if (item.material.map && item.material.map.image) {
+                    const canvas = document.createElement('canvas');
+                    const img = item.material.map.image;
+                    canvas.width = img.width; canvas.height = img.height;
+                    canvas.getContext('2d').drawImage(img, 0, 0);
+                    matJSON.images = [{ uuid: "img_data", url: canvas.toDataURL('image/png') }];
+                }
+                return { name: item.name, tag: item.tag, geo: item.geometry.toJSON(), mat: matJSON };
+            });
+            const blob = new Blob([JSON.stringify({ items })], { type: "application/json" });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob); link.download = 'avatar_library.json'; link.click();
+        };
+
+        document.getElementById('importLib').onclick = () => document.getElementById('jsonInput').click();
+        document.getElementById('jsonInput').onchange = (e) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const data = JSON.parse(event.target.result);
+                const matLoader = new THREE.MaterialLoader();
+                const geoLoader = new THREE.BufferGeometryLoader();
+                const texLoader = new THREE.TextureLoader();
+                library = data.items.map(d => {
+                    const cleanMatJSON = JSON.parse(JSON.stringify(d.mat));
+                    if (cleanMatJSON.map) delete cleanMatJSON.map;
+                    const material = matLoader.parse(cleanMatJSON);
+                    if (d.mat.images && d.mat.images.length > 0) {
+                        const texture = texLoader.load(d.mat.images[0].url);
+                        texture.flipY = false; 
+                        texture.colorSpace = THREE.SRGBColorSpace;
+                        material.map = texture;
+                    }
+                    return { name: d.name, tag: d.tag, geometry: geoLoader.parse(d.geo), material };
+                });
+                updateLibraryUI();
+            };
+            reader.readAsText(e.target.files[0]);
+        };
+
+        // --- ANALYSE IA & AUTO-MAPPING ---
+        document.getElementById('apiImageInput').onchange = (e) => {
+            const file = e.target.files[0];
+            if(file) {
+                document.getElementById('imagePreview').src = URL.createObjectURL(file);
+                document.getElementById('sendToApi').disabled = false;
+            }
+        };
+
+        document.getElementById('sendToApi').onclick = async () => {
+            const file = document.getElementById('apiImageInput').files[0];
+            const formData = new FormData();
+            formData.append('image', file);
+            document.getElementById('apiStatus').innerText = "Analyse...";
+            try {
+                const res = await fetch('http://127.0.0.1:5010/process', { method: 'POST', body: formData });
+                const data = await res.json();
+                document.getElementById('apiFeatures').innerText = JSON.stringify(data.mapping, null, 2);
+                mapping = data.mapping; // Tags détectés (ex: ["GLASSES_YES", "HAIR_SHORT"])
+                document.getElementById('start_auto_apply').disabled = false;
+                document.getElementById('apiStatus').innerText = "Prêt à appliquer";
+            } catch (e) { 
+                document.getElementById('apiStatus').innerText = "Erreur API";
+            }
+        };
+
+        document.getElementById('start_auto_apply').onclick = () => {
+            if (!mapping || mapping.length === 0) return;
+            const mappingLower = mapping.map(tag => tag.toLowerCase());
+            let count = 0;
+
+            library.forEach(item => {
+                if (mappingLower.includes(item.tag.toLowerCase())) {
+                    applyToModel(item);
+                    count++;
+                }
+            });
+
+            document.getElementById('apiStatus').innerText = `Appliqué : ${count} éléments.`;
+            console.log("Auto-Mapping terminé.");
+        };
+    </script>
+</body>
+</html>
