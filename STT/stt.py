@@ -2,7 +2,7 @@ import subprocess
 import logging
 import threading
 import time
-from voice_recorder import start_recording
+from voice_recorder import start_recording, try_audio_device
 from whisperv3 import transcribe_audio, init
 from flask import Flask, Response, request
 from flask_cors import CORS
@@ -74,4 +74,5 @@ def main():
     flaskApp.run(host='0.0.0.0', port=5007)
 
 if __name__ == "__main__":
+    try_audio_device()
     main()

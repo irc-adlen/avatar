@@ -63,6 +63,22 @@ def start_recording():
 
     return "records/recording.wav"
 
+def try_audio_device():
+    try:
+        with sd.InputStream(
+            device=INPUT_DEVICE,
+            samplerate=SAMPLE_RATE,
+            channels=CHANNELS,
+            callback=audio_callback,
+            blocksize=int(SAMPLE_RATE * BLOCK_DURATION),
+            dtype="float32"
+        ):
+            time.sleep(0.1)
+            print("Audio device is working correctly.")
+
+    except sd.CallbackStop:
+        print("Silence detected, stopping recording")
+
 def audio_callback(indata, frames, time_info, status):
     global silence_time
     global hasStopped
