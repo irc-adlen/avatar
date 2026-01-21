@@ -148,6 +148,8 @@ services:
     gpus: all
     environment:
       - NVIDIA_VISIBLE_DEVICES=1 # Spécifie la carte GPU à utiliser (ajuster selon le système)
+    ports:
+      - "8080:8080"
 
 volumes:
   hf_cache:

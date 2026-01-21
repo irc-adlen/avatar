@@ -43,9 +43,13 @@ class AudioStreamManager:
     async def broadcast(self, data: dict):
         if self.active_connection:
             try:
+                print(f">>> [Broadcast] Envoi de {data.get('type')} au client")
                 await self.active_connection.send_json(data)
-            except Exception:
+            except Exception as e:
+                print(f"!!! [Broadcast] Erreur lors de l'envoi: {e}")
                 self.disconnect()
+        else:
+            print("!!! [Broadcast] Aucun client connecté !")
 
 stream_manager = AudioStreamManager()
 
@@ -120,23 +124,25 @@ async def process_conversation(request: ChatRequest):
                 try:
                     print(">>> [Moshi] En attente de l'audio...")
                     async for message in moshi_ws:
-                        print(">>> [Moshi] Message audio reçu")
                         data = msgpack.unpackb(message, raw=False)
                         msg_type = data.get("type")
                         
+                        print(f">>> [Moshi] Message reçu: {msg_type}")
+                        
                         if msg_type == "Audio":
-                            # Conversion PCM -> Base64 pour le client Web
                             import struct
                             pcm_bytes = struct.pack(f'{len(data["pcm"])}f', *data["pcm"])
                             b64 = base64.b64encode(pcm_bytes).decode("utf-8")
                             
-                            # Envoi au Frontend
                             await stream_manager.broadcast({
                                 "type": "audio",
                                 "data": b64,
-                                "sample_rate": 24000 # Standard Moshi
+                                "sample_rate": 24000
                             })
-                        # On ignore les métadonnées pour alléger
+                        
+                        # Transmettre tout autre type de message
+                        else:
+                            await stream_manager.broadcast({"type": "meta", "content": data})
                             
                 except websockets.ConnectionClosed:
                     print(">>> [Moshi] Connexion fermée")
