@@ -97,19 +97,10 @@ async def process_conversation(request: ChatRequest):
                                 full_text = data.get("prompt", "")
                                 print(f">>> [LLM] Réponse reçue : {full_text[:50]}...")
 
-                                # ASTUCE : On découpe le texte en phrases pour l'envoyer petit à petit à Moshi
-                                # Cela simule le streaming et permet au TTS de commencer vite.
-                                sentences = re.split(r'(?<=[.!?]) +', full_text)
-                                
-                                for sentence in sentences:
-                                    if sentence.strip() and not stop_event.is_set():
-                                        # Envoi du texte à Moshi
-                                        await moshi_ws.send(msgpack.packb({"type": "Text", "text": sentence}))
-                                        # Petite pause technique pour fluidifier le buffer TTS
-                                        await asyncio.sleep(0.05)
-                                
-                                # Signal de fin pour Moshi une fois tout le texte envoyé
-                                if not stop_event.is_set():
+                                # On envoie TOUT le texte d'un coup à Moshi
+                                # qui gère lui-même la synthèse et le streaming audio
+                                if full_text.strip() and not stop_event.is_set():
+                                    await moshi_ws.send(msgpack.packb({"type": "Text", "text": full_text}))
                                     await moshi_ws.send(msgpack.packb({"type": "Eos"}))
                             else:
                                 error_txt = await resp.text()

@@ -330,9 +330,17 @@ function ensureAvatarIsListening() {
   }
 }
 
+// Variables à l'extérieur de la fonction pour persister l'état
+let metaQueue = [];
+let isAudioStarted = false;
+
 function connectSocket() {
   if (socket) socket.close();
   if (head && head.isStreaming) head.streamStop();
+
+  // Reset de l'état à chaque nouvelle connexion
+  metaQueue = [];
+  isAudioStarted = false;
 
   socket = new WebSocket("ws://localhost:8000/stream/audio");
 
@@ -345,27 +353,53 @@ function connectSocket() {
 
     if (msg.type === "audio") {
       ensureAvatarIsListening();
+      
+      // Si c'est le premier audio, on libère les meta stockés
+      if (!isAudioStarted) {
+        isAudioStarted = true;
+        processMetaQueue();
+      }
+
       const f32 = base64ToFloat32(msg.data);
       const pcm16 = float32ToInt16(f32);
       head.streamAudio({ audio: pcm16 });
     } 
     else if (msg.type === "meta") {
-      const c = msg.content || {};
-      const word = c.text || c.word;
-
-      if (word) {
-        ensureAvatarIsListening();
-        head.streamAudio({
-          audio: new ArrayBuffer(0), 
-          words: [word],
-          wtimes: [c.start_s * 1000],      
-          wdurations: [(c.stop_s - c.start_s) * 1000]
-        });
+      // Au lieu de jouer le meta tout de suite, on le stocke
+      if (!isAudioStarted) {
+        metaQueue.push(msg);
+      } else {
+        // Si l'audio a déjà commencé, on joue le meta directement
+        playMeta(msg);
       }
     }
   };
 
   socket.onerror = () => {};
+}
+
+// Fonction utilitaire pour traiter la file d'attente
+function processMetaQueue() {
+  while (metaQueue.length > 0) {
+    const msg = metaQueue.shift();
+    playMeta(msg);
+  }
+}
+
+// Fonction isolée pour jouer un message meta
+function playMeta(msg) {
+  const c = msg.content || {};
+  const word = c.text || c.word;
+
+  if (word) {
+    ensureAvatarIsListening();
+    head.streamAudio({
+      audio: new ArrayBuffer(0), 
+      words: [word],
+      wtimes: [c.start_s * 1000],      
+      wdurations: [(c.stop_s - c.start_s) * 1000]
+    });
+  }
 }
 
 let avatarSocket = null;
