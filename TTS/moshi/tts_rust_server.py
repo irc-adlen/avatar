@@ -138,12 +138,6 @@ async def websocket_client():
         "out", type=str, help="Output file to generate, use - for playing the audio"
     )
     parser.add_argument(
-        "--voice",
-        default="expresso/ex03-ex01_happy_001_channel1_334s.wav",
-        help="The voice to use, relative to the voice repo root. "
-        f"See {DEFAULT_DSM_TTS_VOICE_REPO}",
-    )
-    parser.add_argument(
         "--url",
         help="The URL of the server to which to send the audio",
         default="ws://127.0.0.1:8080",
@@ -151,7 +145,7 @@ async def websocket_client():
     parser.add_argument("--api-key", default="public_token")
     args = parser.parse_args()
 
-    params = {"voice": args.voice, "format": "PcmMessagePack"}
+    params = {"voice": "default_voice", "format": "PcmMessagePack"}
     uri = f"{args.url}/api/tts_streaming?{urlencode(params)}"
     print(uri)
 

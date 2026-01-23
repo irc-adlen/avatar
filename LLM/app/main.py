@@ -17,7 +17,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
 # --- CONFIGURATION ---
-MODEL_ID = "mistralai/Mistral-Nemo-Instruct-2407"
+MODEL_ID = "casperhansen/mistral-nemo-instruct-2407-awq"
 DATA_PATH = "/data"         # Dossier monté dans Docker contenant les PDF
 DB_PATH = "/vector_db"      # Dossier monté pour la persistance ChromaDB
 # URI Mongo : "mongo_db" est le nom du service dans docker-compose
@@ -70,15 +70,17 @@ logger.info("🧠 [2/3] Chargement vLLM...")
 # Configuration : Puisque le TTS est ailleurs, on donne 90% du GPU au LLM
 llm_engine = LLM(
     model=MODEL_ID,
-    tensor_parallel_size=2,      # Utilise vos 2 GPU
-    dtype="bfloat16",            # Format rapide
-    max_model_len=8192,          # Contexte large
-    gpu_memory_utilization=0.90, # On utilise quasi toute la VRAM dispo
-    enforce_eager=True           # Optimisation démarrage
+    quantization="awq",          # <--- AJOUTEZ CECI
+    tensor_parallel_size=1,      # <--- ASSUREZ-VOUS QUE C'EST 1
+    dtype="float16",             # AWQ fonctionne souvent mieux en float16
+    max_model_len=8192,
+    gpu_memory_utilization=0.7,  # 70% est suffisant pour la version AWQ
+    enforce_eager=True,
+    trust_remote_code=True
 )
 
 # Paramètres de génération
-chat_sampling = SamplingParams(temperature=0.7, top_p=0.9, max_tokens=256, stop=["<|im_end|>"])
+chat_sampling = SamplingParams(temperature=0.1, top_p=0.95, max_tokens=256, stop=["<|im_end|>"])
 json_sampling = SamplingParams(temperature=0.1, max_tokens=128, stop=["<|im_end|>"])
 
 logger.info("   ✅ vLLM Prêt.")
@@ -153,7 +155,7 @@ async def brain_endpoint(req: BrainRequest):
         
         # B1. Vérification du contexte (Est-ce une réponse à "Quel est ton nom ?")
         last_bot = None
-        if chat_collection:
+        if chat_collection is not None:
             last_bot = chat_collection.find_one(
                 {"session_id": req.session_id, "role": "assistant"}, 
                 sort=[("timestamp", -1)]
@@ -186,7 +188,7 @@ JSON: [/INST]"""
         # B2. Conversation RAG Classique (Si ce n'était pas une extraction de nom)
         if not response_text:
             # 1. Recherche Documentaire
-            docs = vector_db.as_retriever(search_kwargs={"k": 2}).invoke(req.text)
+            docs = vector_db.as_retriever(search_kwargs={"k": 5}).invoke(req.text)
             context = "\n".join([d.page_content for d in docs])
             
             # 2. Récupération Historique
@@ -194,10 +196,15 @@ JSON: [/INST]"""
             
             # 3. Prompt RAG pour Mistral
             prompt_chat = f"""<|im_start|>system
-Tu es l'assistant de CPE Lyon. 
-Réponds oralement, de manière concise (2 phrases max), en français.
-Fais des réponses chaleureuses et engageantes, pouvant être prononcées à voix haute.
-Utilise le contexte suivant si pertinent :
+Tu es l'assistant officiel de CPE Lyon.
+Ton rôle est de répondre aux questions des étudiants en utilisant UNIQUEMENT les informations du contexte ci-dessous.
+
+RÈGLES ABSOLUES :
+1. Si la réponse n'est pas dans le contexte, tu DOIS dire : "Je n'ai pas cette information dans mes documents."
+2. NE JAMAIS inventer de noms, de dates ou de règlements.
+3. Réponds de manière concise (2 phrases max) et orale.
+
+CONTEXTE DE RÉFÉRENCE :
 {context}<|im_end|>
 {history}
 <|im_start|>user
@@ -219,5 +226,5 @@ Utilise le contexte suivant si pertinent :
     }
 
 if __name__ == "__main__":
-    # Ce service écoute sur le port 8000
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Ce service écoute sur le port 8001
+    uvicorn.run(app, host="0.0.0.0", port=8001)

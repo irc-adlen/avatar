@@ -350,6 +350,7 @@ function connectSocket() {
       head.streamAudio({ audio: pcm16 });
     } 
     else if (msg.type === "meta") {
+    
       const c = msg.content || {};
       const word = c.text || c.word;
 

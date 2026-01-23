@@ -21,14 +21,13 @@ services:
     image: faceapp:latest
     devices:
       - "/dev/video0:/dev/video0"
+      - /dev/snd:/dev/snd
     environment:
       - INSIGHTFACE_PROVIDER=CPUExecutionProvider
     volumes:
       - ./FaceRecognition/insightface_models:/root/.insightface/models
       - ./captures:/app/captures
     privileged: true
-    networks:
-      - moshi_net
     ports:
       - "5006:5006"
     depends_on:
@@ -49,11 +48,19 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./records:/app/records
       - ./cacheHuggingFace:/root/.cache/huggingface
+    environment:
+      INPUT_DEVICE: 1
     devices:
       - /dev/snd:/dev/snd
     group_add:
       - "audio"
-    gpus: all
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            device_ids: ['1']
+            capabilities: [gpu]
     restart: unless-stopped
 
   mongo:
@@ -63,8 +70,6 @@ services:
     volumes:
       - mongo_data:/data/db # Persistance des données sur le disque
       - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
-    networks:
-      - moshi_net
     ports:
       - "27017:27017"
 
@@ -72,34 +77,37 @@ services:
   # LLM : ORCHESTRATEUR (Gateway / CPU)
   # ==========================================
   orchestrator:
-    build: ./LLM
+    build: 
+      context: ./TTS/api
+      dockerfile: ./Dockerfile
     image: cpe-orchestrator:latest
     container_name: cpe-orchestrator
     ports:
-      - "8001:8001"
+      - "8000:8000"
     environment:
       # Indique où trouver le cerveau (nom du service ci-dessus)
-      - CPE_BRAIN_HOST=cpe-brain
+      - CPE_BRAIN_HOST=host.docker.internal
 
       # Indique où trouver Moshi (host.docker.internal = votre machine physique)
       # Si Moshi est un autre conteneur, mettez son nom ici.
-      - MOSHI_HOST=host.docker.internal
+      - MOSHI_HOST=moshi
     extra_hosts:
       # Permet au conteneur de voir le localhost de votre machine Ubuntu
       - "host.docker.internal:host-gateway"
     depends_on:
       - cpe-brain
-    networks:
-      - cpe-network
 
   # ==========================================
   # LLM : CERVEAU (Intelligence / GPU)
   # ==========================================
   cpe-brain:
-    build: ./TTS/api
+    build:
+      context: ./LLM
+      dockerfile: ./Dockerfile
+    image: cpe-brain:latest
     container_name: cpe-brain
     ports:
-      - "8000:8000"
+      - "8001:8001"
     volumes:
       # Vos documents pour le RAG
       - ./LLM/data:/data
@@ -110,39 +118,39 @@ services:
     environment:
       # Connexion à Mongo via le nom du service docker
       - MONGO_URI=mongodb://mongo:27017
+      - MOSHI_HOST=moshi
       # - HUGGING_FACE_HUB_TOKEN=votre_token_huggingface_ici
     deploy:
       resources:
         reservations:
           devices:
-            - driver: nvidia
-              count: all # Utilise les 2 GPUs
-              capabilities: [gpu]
+          - driver: nvidia
+            device_ids: ['0']
+            capabilities: [gpu]
     # Important pour vLLM en multi-GPU (mémoire partagée)
     ipc: host
     depends_on:
       - mongo
-    networks:
-      - cpe-network
 
   # --- TTS (Moshi) ---
   moshi:
-    build: ./TTS/moshi
+    build: 
+      context: ./TTS/moshi
+      dockerfile: ./Dockerfile
     container_name: moshi_server
     volumes:
       - moshi_data:/app/data_moshi # Persistance des modèles
-    gpus: all
-    environment:
-      - NVIDIA_VISIBLE_DEVICES=1  # Spécifie la carte GPU à utiliser (ajuster selon le système)
-    networks:
-      - moshi_net
+    deploy:
+      resources:
+        reservations:
+          devices:
+          - driver: nvidia
+            device_ids: ['1']
+            capabilities: [gpu]
+    ports:
+      - "8080:8080"
 
 volumes:
   hf_cache:
   moshi_data:
   mongo_data:
-
-networks:
-  moshi_net:
-  cpe-network:
-    driver: bridge
