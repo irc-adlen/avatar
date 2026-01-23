@@ -7,7 +7,7 @@ import os
 # Audio configuration
 SAMPLE_RATE = 48000
 CHANNELS = 1
-INPUT_DEVICE = int(os.getenv("INPUT_DEVICE", "3"))
+INPUT_DEVICE = 4
 BLOCK_DURATION = 0.1  # seconds
 SILENCE_THRESHOLD = 0.015  # volume threshold
 MAX_SILENCE_DURATION = 1.5  # seconds before stopping
@@ -19,6 +19,8 @@ silence_time = 0.0
 
 hasStopped = False
 
+print("Liste des devices vus par Docker :")
+print(sd.query_devices())
 
 def start_recording():
     global hasStopped
