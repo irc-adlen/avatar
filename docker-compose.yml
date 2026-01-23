@@ -131,9 +131,9 @@ services:
       resources:
         reservations:
           devices:
-            - driver: nvidia
-              count: all # Utilise les 2 GPUs
-              capabilities: [gpu]
+          - driver: nvidia
+            device_ids: ['0']
+            capabilities: [gpu]
     # Important pour vLLM en multi-GPU (mémoire partagée)
     ipc: host
     depends_on:

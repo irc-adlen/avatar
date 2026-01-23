@@ -17,7 +17,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 
 # --- CONFIGURATION ---
-MODEL_ID = "mistralai/Mistral-Nemo-Instruct-2407"
+MODEL_ID = "casperhansen/mistral-nemo-instruct-2407-awq"
 DATA_PATH = "/data"         # Dossier monté dans Docker contenant les PDF
 DB_PATH = "/vector_db"      # Dossier monté pour la persistance ChromaDB
 # URI Mongo : "mongo_db" est le nom du service dans docker-compose
@@ -78,7 +78,7 @@ llm_engine = LLM(
 )
 
 # Paramètres de génération
-chat_sampling = SamplingParams(temperature=0.7, top_p=0.9, max_tokens=256, stop=["<|im_end|>"])
+chat_sampling = SamplingParams(temperature=0.1, top_p=0.95, max_tokens=256, stop=["<|im_end|>"])
 json_sampling = SamplingParams(temperature=0.1, max_tokens=128, stop=["<|im_end|>"])
 
 logger.info("   ✅ vLLM Prêt.")
@@ -186,7 +186,7 @@ JSON: [/INST]"""
         # B2. Conversation RAG Classique (Si ce n'était pas une extraction de nom)
         if not response_text:
             # 1. Recherche Documentaire
-            docs = vector_db.as_retriever(search_kwargs={"k": 2}).invoke(req.text)
+            docs = vector_db.as_retriever(search_kwargs={"k": 5}).invoke(req.text)
             context = "\n".join([d.page_content for d in docs])
             
             # 2. Récupération Historique
@@ -194,10 +194,15 @@ JSON: [/INST]"""
             
             # 3. Prompt RAG pour Mistral
             prompt_chat = f"""<|im_start|>system
-Tu es l'assistant de CPE Lyon. 
-Réponds oralement, de manière concise (2 phrases max), en français.
-Fais des réponses chaleureuses et engageantes, pouvant être prononcées à voix haute.
-Utilise le contexte suivant si pertinent :
+Tu es l'assistant officiel de CPE Lyon.
+Ton rôle est de répondre aux questions des étudiants en utilisant UNIQUEMENT les informations du contexte ci-dessous.
+
+RÈGLES ABSOLUES :
+1. Si la réponse n'est pas dans le contexte, tu DOIS dire : "Je n'ai pas cette information dans mes documents."
+2. NE JAMAIS inventer de noms, de dates ou de règlements.
+3. Réponds de manière concise (2 phrases max) et orale.
+
+CONTEXTE DE RÉFÉRENCE :
 {context}<|im_end|>
 {history}
 <|im_start|>user
