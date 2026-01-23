@@ -1,13 +1,9 @@
 # Launch the project
 
-All the project can be started with the [docker compose](./docker-compose.yml).
+Everything is containerized with Docker.
+To run the project, you must execute the [build_all.sh](./build_all.sh) script first. It will build all the necessary Docker images. (docker compose up --build could work as well, but it is not recommended).
+
+Once the Dockers are built, the project can be started with the [docker compose](./docker-compose.yml).
 On the first launch, plenty of AI models will be downloaded. It might take a long time.
 
-### Mic configuration
-
-At first lauch, the stt shoul crash. In the logs you will find all the camera devices available.
-You have to change the `INPUT_DEVICE` variable in the [voice recorder](./STT/voice_recorder.py) file.
-
-### Camera configuration
-
-A camera have to be plugged for the project to work.
+You can refer to this [video]() to know which hardware is recommended to run the project.
